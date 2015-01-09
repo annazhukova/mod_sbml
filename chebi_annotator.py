@@ -1,9 +1,15 @@
 from collections import defaultdict
+import os
 from libsbml import Species, BQB_IS, BQB_IS_VERSION_OF
+import misc
 from obo_ontology import miriam_to_term_id, to_identifiers_org_format
 from sbml_manager import get_qualifier_values, add_annotation
 
 __author__ = 'anna'
+
+
+def get_chebi():
+    return "%s/data/chebi.obo" % os.path.dirname(os.path.abspath(misc.__file__))
 
 
 def get_is_annotations(entity):
