@@ -1,6 +1,7 @@
 from collections import defaultdict
 import logging
 from libsbml import *
+from obo_ontology import to_identifiers_org_format
 from pathway_manager import get_relevant_pathway_info
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
@@ -161,6 +162,15 @@ def get_chebi_id(m):
     return None
 
 
+def get_taxonomy(model):
+    occurs_in = get_qualifier_values(model.getAnnotation(), BQB_OCCURS_IN)
+    for it in occurs_in:
+        start = it.find("taxonomy")
+        if start != -1:
+            return it[start + len("taxonomy:"):].strip()
+    return None
+
+
 def copy_sbml(sbml_in, sbml_out):
     input_doc = SBMLReader().readSBML(sbml_in)
     SBMLWriter().writeSBMLToFile(input_doc, sbml_out)
@@ -226,6 +236,18 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None):
     new_species.setSBOTerm(SBO_MATERIAL_ENTITY)
     new_species.setBoundaryCondition(bound)
     return new_species
+
+
+def create_compartment(model, name, outside=None, term_id=None, id_=None):
+    new_comp = model.createCompartment()
+    id_ = generate_unique_id(model, id_ if id_ else "c_new")
+    new_comp.setId(id_)
+    new_comp.setName(name)
+    if outside:
+        new_comp.setOutside(outside)
+    if term_id:
+        add_annotation(new_comp, BQB_IS, to_identifiers_org_format(term_id, "obo.go"))
+    return new_comp
 
 
 def generate_unique_id(model, id_=None):
