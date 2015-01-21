@@ -1,8 +1,12 @@
 from collections import defaultdict
 import logging
-from libsbml import *
+
+from libsbml import LIBSBML_OPERATION_SUCCESS, BIOLOGICAL_QUALIFIER, CVTerm, SBMLReader, SBMLWriter, BQB_IS_PART_OF, \
+    BQB_IS, BQB_OCCURS_IN
+
 from obo_ontology import to_identifiers_org_format
 from pathway_manager import get_relevant_pathway_info
+
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
 
@@ -263,16 +267,16 @@ def generate_unique_id(model, id_=None):
     return "%s_%d" % (id_, i)
 
 
-def get_reaction_ids(model, s_id):
-    return {r.id for r in model.getListOfReactions() if s_id in get_metabolites(r)}
+def get_r_ids_by_s_ids(model, s_ids):
+    return {r.id for r in model.getListOfReactions() if set(s_ids) & get_metabolites(r)}
 
 
-def get_reactions_by_comp(model, comps, strict=False):
+def get_r_ids_by_comp(model, comps, strict=False):
     r_ids = set()
     for r in model.getListOfReactions():
         s_ids = get_metabolites(r)
-        if strict and not {model.getSpecies(s_id).getCompartment() for s_id in s_ids} - comps or \
-                        not strict and {model.getSpecies(s_id).getCompartment() for s_id in s_ids} & comps:
+        if strict and not {model.getSpecies(s_id).getCompartment() for s_id in s_ids} - comps or not strict and {
+            model.getSpecies(s_id).getCompartment() for s_id in s_ids} & comps:
             r_ids.add(r.id)
     return r_ids
 
@@ -295,3 +299,35 @@ def submodel(r_ids_to_keep, model):
     c_ids_to_keep |= c_ids_to_add
     for c_id in [c.id for c in model.getListOfCompartments() if not c.id in c_ids_to_keep]:
         model.removeCompartment(c_id)
+
+
+def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
+    s_id2r_ids, r_id2s_ids = defaultdict(set), {}
+    for r in model.getListOfReactions():
+        if blocked_r_ids and r.id in blocked_r_ids:
+            continue
+        sp_ids = get_metabolites(r) - ubiquitous_s_ids
+        r_id2s_ids[r.id] = sp_ids
+        for sp_id in sp_ids:
+            s_id2r_ids[sp_id].add(r.id)
+    s_ids_to_process = set(s_ids)
+    s_ids_processed = set()
+    r_ids = set()
+    while s_ids_to_process:
+        s_id = s_ids_to_process.pop()
+        s_ids_processed.add(s_id)
+        if s_id not in s_id2r_ids:
+            continue
+        r_ids_to_add = s_id2r_ids[s_id] - r_ids
+        r_ids |= r_ids_to_add
+        for r_id in r_ids_to_add:
+            s_ids_to_process |= (r_id2s_ids[r_id] - s_ids_processed)
+
+    for s in sorted((model.getSpecies(s_id) for s_id in s_ids_processed), key=lambda s: s.name):
+        print(s.name, s.id, len(s_id2r_ids[s.id]))
+
+    print("________________________________________")
+    for s in sorted((model.getSpecies(s_id) for s_id in ubiquitous_s_ids), key=lambda s: s.name):
+        print(s.name, s.id)
+
+    return r_ids

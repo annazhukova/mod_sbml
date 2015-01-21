@@ -162,12 +162,12 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
     populated = {org for org in organelle2parts.iterkeys() if lambda org: organelle2parts[org]}
     # organelle
     organelle = onto.get_term(GO_ORGANELLE)
-    organelle_ids = {it.get_id() for it in organelle.get_ancestors(False)} | {GO_ORGANELLE.lower()}
+    organelle_ids = {it.get_id() for it in organelle.get_descendants(False)} | {GO_ORGANELLE.lower()}
     for it in no_organelle_parts:
         if it in organelles:
             if it in populated:
                 continue
-            parents = set(onto.get_ancestors(it, False)) & populated
+            parents = set(onto.get_descendants(it, False)) & populated
             if parents:
                 organelle2parts[parents.pop()].add(it)
                 continue

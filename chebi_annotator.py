@@ -1,11 +1,20 @@
 from collections import defaultdict
 import os
+
 from libsbml import Species, BQB_IS, BQB_IS_VERSION_OF
+
 import misc
 from obo_ontology import miriam_to_term_id, to_identifiers_org_format
 from sbml_manager import get_qualifier_values, add_annotation
 
+
 __author__ = 'anna'
+
+HAS_ROLE_RELATIONSHIP = 'has_role'
+
+COFACTOR_CHEBI_ID = 'chebi:23357'
+
+CONJUGATE_ACID_BASE_RELATIONSHIPS = {'is_conjugate_base_of', 'is_conjugate_acid_of'}
 
 
 def get_chebi():
@@ -13,11 +22,11 @@ def get_chebi():
 
 
 def get_is_annotations(entity):
-    return (miriam_to_term_id(it) for it in get_qualifier_values(entity.getAnnotation(), BQB_IS))
+    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, BQB_IS))
 
 
 def get_is_vo_annotations(entity):
-    return (miriam_to_term_id(it) for it in get_qualifier_values(entity.getAnnotation(), BQB_IS_VERSION_OF))
+    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, BQB_IS_VERSION_OF))
 
 
 def get_term(entity, chebi):
@@ -101,3 +110,27 @@ def get_species_to_chebi(model, chebi, guess=True):
             add_annotation(entity, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
             used_terms.add(term)
     return species2chebi
+
+
+def get_cofactors(onto):
+    cofactors = set()
+    sub_cofactors = onto.get_term(COFACTOR_CHEBI_ID).get_descendants(False)
+
+    def is_cofactor(t_id):
+        if COFACTOR_CHEBI_ID == t_id:
+            return True
+        return onto.get_term(t_id) in sub_cofactors
+
+    for it in onto.get_relationship_participants(HAS_ROLE_RELATIONSHIP):
+        subj, rel, obj = it
+        if rel == HAS_ROLE_RELATIONSHIP and is_cofactor(obj):
+            subj_term = onto.get_term(subj)
+            children = {t.get_id() for t in
+                        onto.get_generalized_descendants(subj_term, False, set(), CONJUGATE_ACID_BASE_RELATIONSHIPS)}
+            equals = {t.get_id() for t in onto.get_equivalents(subj_term, CONJUGATE_ACID_BASE_RELATIONSHIPS)}
+            cofactors |= {subj} | children | equals
+    return cofactors
+
+
+
+

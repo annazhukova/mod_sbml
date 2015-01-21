@@ -222,12 +222,12 @@ class Term:
     def add_child(self, term):
         self.children.add(term)
 
-    def get_ancestors(self, direct=True):
+    def get_descendants(self, direct=True):
         result = set(self.children)
         if direct:
             return result
         for child in self.children:
-            result |= child.get_ancestors(direct)
+            result |= child.get_descendants(direct)
         return result
 
     def __str__(self):
@@ -291,7 +291,7 @@ class Ontology:
             self.name2term_ids[name].add(t_id)
         if not term.get_parent_ids():
             self.roots.add(term)
-        for child in term.get_ancestors():
+        for child in term.get_descendants():
             child.parents.add(t_id)
             self.roots -= {child}
 
@@ -331,7 +331,7 @@ class Ontology:
         parents = term.get_parent_ids()
         if not parents:
             self.roots -= {term}
-        children = term.get_ancestors()
+        children = term.get_descendants()
         for par_id in parents:
             par = self.get_term(par_id)
             par.children -= {term}
@@ -363,7 +363,7 @@ class Ontology:
         return None
 
     def is_a(self, child, parent):
-        return child in parent.get_ancestors(False)
+        return child in parent.get_descendants(False)
 
     def part_of(self, part_id, whole_ids):
         term = self.get_term(part_id)
@@ -437,7 +437,7 @@ class Ontology:
         terms = {term} | self.get_equivalents(term, None, 0, relationships)
         direct_kids = set()
         for it in terms:
-            children = it.get_ancestors(True)
+            children = it.get_descendants(True)
             direct_kids |= children
             for ch in children:
                 direct_kids |= self.get_equivalents(ch, None, 0, relationships)
