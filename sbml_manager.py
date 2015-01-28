@@ -5,7 +5,7 @@ from libsbml import LIBSBML_OPERATION_SUCCESS, BIOLOGICAL_QUALIFIER, CVTerm, SBM
     BQB_IS, BQB_OCCURS_IN
 
 from obo_ontology import to_identifiers_org_format
-from pathway_manager import get_relevant_pathway_info
+from kegg.pathway_manager import get_relevant_pathway_info
 
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
