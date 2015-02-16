@@ -5,7 +5,7 @@ from libsbml import Species, BQB_IS, BQB_IS_VERSION_OF
 
 import misc
 from obo_ontology import miriam_to_term_id, to_identifiers_org_format
-from sbml_manager import get_qualifier_values, add_annotation
+from sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id
 
 
 __author__ = 'anna'
@@ -73,7 +73,11 @@ def get_species_to_chebi(model, chebi, guess=True):
     # process annotated ones
     # and find those that need to be annotated
     for species in model.getListOfSpecies():
+        has_chebi = next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
+                         None)
         term = get_term(species, chebi)
+        if term and not has_chebi:
+            add_annotation(species, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
         entity = species
         if not term:
             s_type_id = species.getSpeciesType()
@@ -81,7 +85,11 @@ def get_species_to_chebi(model, chebi, guess=True):
                 s_type = model.getSpeciesType(s_type_id)
                 if s_type:
                     entity = s_type
+                    has_chebi = next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
+                         None)
                     term = get_term(s_type, chebi)
+                    if term and not has_chebi:
+                        add_annotation(entity, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
         if term:
             species2chebi[species.getId()] = term.get_id()
             used_terms.add(term)
@@ -91,15 +99,24 @@ def get_species_to_chebi(model, chebi, guess=True):
     if guess:
         # annotate unannotated
         for entity, species_set in entity2species.iteritems():
-            name, name_bis = get_names(entity)
-            if isinstance(entity, Species):
-                index = name.lower().find(
-                    "[{0}]".format(model.getCompartment(entity.getCompartment()).getName().lower()))
-                if -1 != index:
-                    name = name[:index].strip()
-            possibilities = chebi.get_ids_by_name(name)
+            possibilities = set()
+            kegg_ids = {it for it in {get_kegg_m_id(entity)} | {get_kegg_m_id(species) for species in species_set} if
+                        it}
+            for kegg in kegg_ids:
+                t_id = chebi.get_t_id_by_kegg(kegg)
+                if t_id:
+                    possibilities = {t_id}
+                    break
             if not possibilities:
-                possibilities = chebi.get_ids_by_name(name_bis)
+                name, name_bis = get_names(entity)
+                if isinstance(entity, Species):
+                    index = name.lower().find(
+                        "[{0}]".format(model.getCompartment(entity.getCompartment()).getName().lower()))
+                    if -1 != index:
+                        name = name[:index].strip()
+                possibilities = chebi.get_ids_by_name(name)
+                if not possibilities:
+                    possibilities = chebi.get_ids_by_name(name_bis)
             if not possibilities:
                 continue
             possibilities = {chebi.get_term(it) for it in possibilities}

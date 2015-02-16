@@ -1,11 +1,8 @@
 from collections import defaultdict
 import logging
-
-from libsbml import LIBSBML_OPERATION_SUCCESS, BIOLOGICAL_QUALIFIER, CVTerm, SBMLReader, SBMLWriter, BQB_IS_PART_OF, \
-    BQB_IS, BQB_OCCURS_IN
+import libsbml
 
 from obo_ontology import to_identifiers_org_format
-from kegg.pathway_manager import get_relevant_pathway_info
 
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
@@ -28,7 +25,7 @@ def get_annotation_term_of_type(element, qualifier_type):
     if cv_terms:
         for i in xrange(cv_terms.getSize()):
             term = cv_terms.get(i)
-            if BIOLOGICAL_QUALIFIER == term.getQualifierType() and qualifier_type == term.getBiologicalQualifierType():
+            if libsbml.BIOLOGICAL_QUALIFIER == term.getQualifierType() and qualifier_type == term.getBiologicalQualifierType():
                 yield term
 
 
@@ -43,7 +40,7 @@ def add_annotation(element, qualifier, annotation):
         element.setMetaId("m_{0}".format(element.getId()))
     term = next(get_annotation_term_of_type(element, qualifier), None)
     if not term:
-        term = CVTerm(BIOLOGICAL_QUALIFIER)
+        term = libsbml.CVTerm(libsbml.BIOLOGICAL_QUALIFIER)
         term.setBiologicalQualifierType(qualifier)
         term.addResource(annotation)
         element.addCVTerm(term, True)
@@ -95,11 +92,14 @@ def get_gene_association(reaction):
         return result.pop()
 
 
-def get_subsystem2r_ids(sbml):
+def get_subsystem2r_ids(sbml=None, model=None):
     subsystem2r_ids = defaultdict(set)
     no_pathway_r_ids = set()
-    input_doc = SBMLReader().readSBML(sbml)
-    model = input_doc.getModel()
+    if not model and not sbml:
+        raise ValueError("Either sbml or model parameter should be specified")
+    if not model:
+        input_doc = libsbml.SBMLReader().readSBML(sbml)
+        model = input_doc.getModel()
     for r in model.getListOfReactions():
         result = set()
         node = r.getNotes()
@@ -111,19 +111,37 @@ def get_subsystem2r_ids(sbml):
     return subsystem2r_ids, no_pathway_r_ids
 
 
-def get_pathway2r_ids(sbml):
+def get_pathway2r_ids(sbml=None, model=None):
     pw2r_ids = defaultdict(set)
     no_pw_r_ids = set()
-    input_doc = SBMLReader().readSBML(sbml)
-    model = input_doc.getModel()
+    if not model and not sbml:
+        raise ValueError("Either sbml or model parameter should be specified")
+    if not model:
+        input_doc = libsbml.SBMLReader().readSBML(sbml)
+        model = input_doc.getModel()
     for r in model.getListOfReactions():
         found = False
-        for annotation in get_annotations(r, BQB_IS_PART_OF):
+        for annotation in get_annotations(r, libsbml.BQB_IS_PART_OF):
             if annotation.find("kegg.pathway") != -1:
                 pw2r_ids[annotation.replace("kegg.pathway:", '')].add(r.getId())
                 found = True
         if not found:
             no_pw_r_ids.add(r.getId())
+    # Should find the following pathways:
+    # 1. citrate cycle (TCA cycle) (hsa00020);
+    # 2. fatty acid metabolism (hsa01212) and 3 sub-pathways:
+    #   (a) fatty acid biosynthesis (hsa00061);
+    #   (b) fatty acid elongation (hsa00062);
+    #   (c) fatty acid degradation (hsa00071);
+    # 3. valine, leucine and isoleucine degradation (hsa00280);
+    # 4. synthesis and degradation of ketone bodies (hsa00072).
+
+    # Let's remove the sub-pathways
+    if "path:hsa01212" in pw2r_ids:
+        for key in ("path:hsa00061", "path:hsa00062", "path:hsa00071"):
+            if key in pw2r_ids:
+                del pw2r_ids[key]
+
     return pw2r_ids, no_pw_r_ids
 
 
@@ -146,28 +164,28 @@ def get_kegg_m_id2m_ids(model):
 
 
 def get_kegg_r_id(r):
-    for annotation in get_annotations(r, BQB_IS):
+    for annotation in get_annotations(r, libsbml.BQB_IS):
         if annotation.find("kegg.reaction") != -1:
             return annotation.replace("kegg.reaction:", '')
     return None
 
 
 def get_kegg_m_id(m):
-    for annotation in get_annotations(m, BQB_IS):
+    for annotation in get_annotations(m, libsbml.BQB_IS):
         if annotation.find("kegg.compound") != -1:
             return annotation.replace("kegg.compound:", '')
     return None
 
 
 def get_chebi_id(m):
-    for annotation in get_annotations(m, BQB_IS):
+    for annotation in get_annotations(m, libsbml.BQB_IS):
         if annotation.lower().find("chebi") != -1:
             return annotation.lower().replace("obo.chebi:", '').replace("chebi:chebi:", 'chebi:')
     return None
 
 
 def get_taxonomy(model):
-    occurs_in = get_qualifier_values(model.getAnnotation(), BQB_OCCURS_IN)
+    occurs_in = get_qualifier_values(model.getAnnotation(), libsbml.BQB_OCCURS_IN)
     for it in occurs_in:
         start = it.find("taxonomy")
         if start != -1:
@@ -176,53 +194,38 @@ def get_taxonomy(model):
 
 
 def copy_sbml(sbml_in, sbml_out):
-    input_doc = SBMLReader().readSBML(sbml_in)
-    SBMLWriter().writeSBMLToFile(input_doc, sbml_out)
-
-
-def annotate_with_pathways(org, sbml, kegg_r_ids, kegg_r_id2r_ids, threshold=0.5):
-    pw2name_rs_ratio = get_relevant_pathway_info(org, {"rn:" + r_id for r_id in kegg_r_ids}, threshold=threshold)
-    input_doc = SBMLReader().readSBML(sbml)
-    model = input_doc.getModel()
-    for pw, (name, rns, ratio) in pw2name_rs_ratio.iteritems():
-        pw = pw.replace("pathway:", "")
-        for kegg_r_id in rns:
-            kegg_r_id = kegg_r_id.replace("rn:", "")
-            for r_id in kegg_r_id2r_ids(kegg_r_id):
-                r = model.getElementBySId(r_id)
-                if r:
-                    add_annotation(r, BQB_IS_PART_OF, "http://identifiers.org/kegg.pathway/%s" % pw)
-                    r.appendNotes("<html:body><html:p>SUBSYSTEM: {1} ({0})</html:p></html:body>".format(pw, name))
-    SBMLWriter().writeSBMLToFile(input_doc, sbml)
+    input_doc = libsbml.SBMLReader().readSBML(sbml_in)
+    libsbml.SBMLWriter().writeSBMLToFile(input_doc, sbml_out)
 
 
 def get_stoichiometry(species_ref):
     result = species_ref.getStoichiometry()
-    if not result:
-        result = species_ref.getStoichiometryMath()
-    if not result:
-        return 1
-    return result
+    if result:
+        return result
+    result = species_ref.getStoichiometryMath()
+    if result:
+        return result
+    return 1
 
 
 def get_reactants(reaction, stoichiometry=False):
     if stoichiometry:
-        return {(species_ref.getSpecies(), get_stoichiometry(species_ref)) for species_ref in
-                reaction.getListOfReactants()}
+        return ((species_ref.getSpecies(), get_stoichiometry(species_ref)) for species_ref in
+                reaction.getListOfReactants())
     else:
-        return {species_ref.getSpecies() for species_ref in reaction.getListOfReactants()}
+        return (species_ref.getSpecies() for species_ref in reaction.getListOfReactants())
 
 
 def get_products(reaction, stoichiometry=False):
     if stoichiometry:
-        return {(species_ref.getSpecies(), get_stoichiometry(species_ref)) for species_ref in
-                reaction.getListOfProducts()}
+        return ((species_ref.getSpecies(), get_stoichiometry(species_ref)) for species_ref in
+                reaction.getListOfProducts())
     else:
-        return {species_ref.getSpecies() for species_ref in reaction.getListOfProducts()}
+        return (species_ref.getSpecies() for species_ref in reaction.getListOfProducts())
 
 
 def get_metabolites(reaction, stoichiometry=False):
-    return get_reactants(reaction, stoichiometry) | get_products(reaction, stoichiometry)
+    return set(get_reactants(reaction, stoichiometry)) | set(get_products(reaction, stoichiometry))
 
 
 def get_r_comp(r_id, model):
@@ -233,7 +236,7 @@ def get_r_comp(r_id, model):
 def create_species(model, compartment_id, name=None, bound=False, id_=None):
     new_species = model.createSpecies()
     id_ = generate_unique_id(model, id_)
-    if LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
+    if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
         logging.error("species  %s creation error" % id_)
     new_species.setName(name)
     new_species.setCompartment(compartment_id)
@@ -250,7 +253,7 @@ def create_compartment(model, name, outside=None, term_id=None, id_=None):
     if outside:
         new_comp.setOutside(outside)
     if term_id:
-        add_annotation(new_comp, BQB_IS, to_identifiers_org_format(term_id, "obo.go"))
+        add_annotation(new_comp, libsbml.BQB_IS, to_identifiers_org_format(term_id, "obo.go"))
     return new_comp
 
 

@@ -2,7 +2,9 @@ import logging
 import urllib2
 import datetime
 import openpyxl
-from xlsx_helper import save_data, HEADER_STYLE, add_values
+from xlsx_helper import save_data, HEADER_STYLE, add_values, get_info
+
+KEGG_REACTION_FILE = "/home/anna/Documents/IBGC/Models/KEGG_reactions.xlsx"
 
 
 def get_rns_by_elements(elements):
@@ -81,14 +83,13 @@ def get_kegg_r_info(rn):
     return name, definition, equation, ec, orthology
 
 
-def serialize_reactions(path):
+def serialize_reactions(path=KEGG_REACTION_FILE):
     wb = openpyxl.Workbook()
     ws = wb.create_sheet(0, "Reactions")
     add_values(ws, 1, 1, ["Id", "Name", "Definition", "Formula", "EC", "Orthology"], HEADER_STYLE)
     row = 2
     rns = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/reaction').read().split("\n") if
              it.find('rn:') != -1}
-    print (rns)
     for rn in rns:
         name, definition, equation, ec, orthology = get_kegg_r_info(rn)
         add_values(ws, row, 1, [rn.replace('rn:', '').strip(), name, definition, equation, ec, orthology])
@@ -96,52 +97,73 @@ def serialize_reactions(path):
     wb.save(path)
 
 
-# serialize_reactions("/home/anna/Documents/IBGC/Models/KEGG_reactions.xlsx")
-
-# print(get_kegg_r_info('R01513'))
-
-
-def get_cpd2rps():
-    cpd2rp = {}
-    rps = urllib2.urlopen('http://rest.kegg.jp/list/rpair').read()
-    for line in rps.split("\n"):
-        if line.find("rp:") != -1:
-            rp, info = line.split("\t")
-            cpd2rp[info] = rp
-    return cpd2rp
-
-
-def get_relevant_rns(rpairs):
-    rns = get_rns_by_elements(rpairs)
-    for rn in rns:
-        if rn:
-            rn_rps = get_rpairs_by_rn(rn)
-            if not rpairs - rn_rps:
-                yield rn
+def get_rs_ps_by_kegg_equation(equation, stoichiometry=False):
+    # Equation looks somewhat like '2 C00430 <=> C00931 + 2 C00001'
+    rs, ps = equation.split(' <=> ')
+    rs, ps = rs.split(' + '), ps.split(' + ')
+    if stoichiometry:
+        def val2pair(val):
+            st_m = val.split(' ')
+            (st, m) = (1, st_m[0]) if len(st_m) == 1 else st_m
+            try:
+                st = float(st)
+            except ValueError:
+                st = 1
+            return m, st
+        rs = {val2pair(m) for m in rs}
+        ps = {val2pair(m) for m in ps}
+    else:
+        rs = {m[0] if len(m) == 1 else m[1] for m in (m.split(' ') for m in rs)}
+        ps = {m[0] if len(m) == 1 else m[1] for m in (m.split(' ') for m in ps)}
+    return rs, ps
 
 
-def get_relevant_rpairs(compounds):
-    rps = get_rpairs_by_compounds(compounds)
-    for rp in rps:
-        rp_cmps = get_compounds_by_rp(rp)
-        if not rp_cmps - compounds:
-            yield rp
+def get_compounds2rn(path=KEGG_REACTION_FILE):
+    rs_ps2rn = {}
+    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
+    # but we are only interested in kegg id (1) and formula (4)
+    for (kegg, formula) in get_info(path, [1, 4], 2):
+        if not formula:
+            continue
+        kegg, formula = str(kegg), str(formula)
+        rs, ps = get_rs_ps_by_kegg_equation(formula)
+        rs, ps = tuple(sorted(rs)), tuple(sorted(ps))
+        if rs > ps:
+            rs, ps = ps, rs
+        rs_ps2rn[(rs, ps)] = kegg
+    return rs_ps2rn
 
 
-def get_rns_by_compounds(r_compounds, p_compounds, cpd2rps=None):
-    if not cpd2rps:
-        cpd2rps = get_cpd2rps()
-    comps = {"cpd:%s" % it for it in r_compounds} | {"cpd:%s" % it for it in p_compounds}
-    if not r_compounds or not p_compounds:
-        return iter([])
-    rp = None
-    for r in r_compounds:
-        for p in p_compounds:
-            cpd = "%s_%s" % (r, p) if r < p else (p, r)
-            if cpd in cpd2rps:
-                rp = cpd2rps[cpd]
-                break
-        if rp:
-            break
-    print(rp)
-    return (rn for rn in get_relevant_rns({rp}) if get_compounds_by_rn(rn) == comps) if rp else iter([])
+def get_rn2kegg_formula(path=KEGG_REACTION_FILE):
+    rn2formula = {}
+    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
+    # but we are only interested in kegg id(1) and definition (3), i.e. a human-readable formula
+    for (kegg, formula) in get_info(path, [1, 3], 2):
+        if not formula:
+            continue
+        rn2formula[str(kegg)] = str(formula)
+    return rn2formula
+
+
+def get_rn2compounds(path=KEGG_REACTION_FILE, stoichiometry=False):
+    rn2rs_ps = {}
+    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
+    # but we are only interested in kegg id (1) and formula (4)
+    for (kegg, formula) in get_info(path, [1, 4], 2):
+        if not formula:
+            continue
+        kegg, formula = str(kegg), str(formula)
+        rn2rs_ps[kegg] = get_rs_ps_by_kegg_equation(formula, stoichiometry)
+    return rn2rs_ps
+
+
+def get_rn2name(path=KEGG_REACTION_FILE):
+    rn2name = {}
+    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
+    # but we are only interested in kegg id (1) and name (2)
+    for (kegg, name) in get_info(path, [1, 2], 2):
+        rn2name[str(kegg)] = str(name)
+    return rn2name
+
+
+

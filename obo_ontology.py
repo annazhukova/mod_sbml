@@ -160,16 +160,19 @@ def parse(obo_file, relationships=None):
                 value = value[start + 1:end]
                 term.add_synonym(value)
             elif prefix == "xref":
+                # xref: KEGG COMPOUND:C00462 "KEGG COMPOUND"
                 value = value.strip()
                 if not value:
                     continue
                 comment = value.find('"')
                 if comment != - 1:
-                    value = value[:comment]
+                    value = value[:comment].strip()
                 modifier = value.find("{")
                 if modifier != -1:
-                    value = value[:modifier]
+                    value = value[:modifier].strip()
                 term.add_alt_id(value.strip().replace(" ", "."))
+                if value.find("KEGG COMPOUND:") != -1:
+                    term.add_kegg(value.replace("KEGG COMPOUND:", '').strip())
 
     if term:
         ontology.add_term(term)
@@ -188,6 +191,7 @@ class Term:
         self.parents = set(parents) if parents else set()
         self.children = set(children) if children else set()
         self.synonyms = set()
+        self.kegg = set()
 
     def get_id(self):
         return str(self.id)
@@ -230,6 +234,12 @@ class Term:
             result |= child.get_descendants(direct)
         return result
 
+    def add_kegg(self, kegg):
+        self.kegg.add(kegg)
+
+    def get_kegg_ids(self):
+        return set(self.kegg)
+
     def __str__(self):
         return "{0}({1})".format(self.get_id(), self.get_name())
 
@@ -241,6 +251,7 @@ class Ontology:
         self.alt_id2term = {}
         self.name2term_ids = defaultdict(set)
         self.rel_map = defaultdict(set)
+        self.kegg2term_id = {}
 
     def get_all_terms(self):
         return self.id2term.values()
@@ -286,6 +297,9 @@ class Ontology:
             self.alt_id2term[alt_id] = term
         names = set(term.get_synonyms())
         names.add(term.get_name())
+        for kegg in term.get_kegg_ids():
+            if kegg:
+                self.kegg2term_id[kegg] = t_id
         for name in names:
             name = name.lower().strip()
             self.name2term_ids[name].add(t_id)
@@ -328,6 +342,10 @@ class Ontology:
                 self.name2term_ids[name] -= {t_id}
                 if not self.name2term_ids[name]:
                     del self.name2term_ids[name]
+        for kegg in term.get_kegg_ids():
+            if kegg in self.kegg2term_id:
+                del self.kegg2term_id[kegg]
+
         parents = term.get_parent_ids()
         if not parents:
             self.roots -= {term}
@@ -500,6 +518,11 @@ class Ontology:
     def get_ids_by_name(self, name):
         name = name.lower()
         return set(self.name2term_ids[name]) if name in self.name2term_ids else set()
+
+    def get_t_id_by_kegg(self, kegg):
+        if kegg in self.kegg2term_id:
+            return self.kegg2term_id[kegg]
+        return None
 
     def common_points(self, terms, depth=None):
         if not terms or depth is not None and depth <= 0:

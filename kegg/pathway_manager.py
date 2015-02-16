@@ -35,10 +35,15 @@ def get_reactions_by_pw(org, pw):
 
 
 def get_pw_name(org, pw):
-    result = urllib2.urlopen('http://rest.kegg.jp/find/pathway/%s' % p_id_specific2generic(org, pw)).read()
+    try:
+        result = urllib2.urlopen('http://rest.kegg.jp/find/pathway/%s' % p_id_specific2generic(org, pw)).read()
+    except:
+        return None
     result = result.replace("\n", '')
-    pw, pw_name = result.split('\t')
-    return pw_name
+    if result.find('\t') != -1:
+        pw, pw_name = result.split('\t')
+        return pw_name
+    return None
 
 
 def get_pw_by_organism(org):
@@ -62,6 +67,8 @@ def get_relevant_pathway_info(org, rns, threshold=0):
         if not pw in pw2name:
             continue
         pw_rs = get_reactions_by_pw(org, generic_pw)
+        if not pw_rs:
+            continue
         rs = pw_rs & rns
         ratio = len(rs) * 1.0 / len(pw_rs)
         if ratio > threshold:
