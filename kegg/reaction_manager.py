@@ -5,6 +5,7 @@ import openpyxl
 from xlsx_helper import save_data, HEADER_STYLE, add_values, get_info
 
 KEGG_REACTION_FILE = "/home/anna/Documents/IBGC/Models/KEGG_reactions.xlsx"
+KEGG_COMPOUND_FILE = "/home/anna/Documents/IBGC/Models/KEGG_compounds.xlsx"
 
 
 def get_rns_by_elements(elements):
@@ -83,6 +84,28 @@ def get_kegg_r_info(rn):
     return name, definition, equation, ec, orthology
 
 
+def get_kegg_c_info(cpd):
+    names, formula = {}, ''
+    try:
+        compound = urllib2.urlopen('http://rest.kegg.jp/get/%s' % cpd).read()
+        cur_line = ''
+        for line in compound.split("\n"):
+            if line.find(';') != -1:
+                cur_line += line
+                continue
+            line = cur_line + line
+            cur_line = ''
+            if line.find("NAME") != -1:
+                names = {it.strip() for it in line.replace("NAME", '').strip().split(';') if it.strip()}
+            elif line.find("FORMULA") != -1:
+                formula = line.replace("FORMULA", '').strip()
+            if names and formula:
+                return names, formula
+    except:
+        pass
+    return names, formula
+
+
 def serialize_reactions(path=KEGG_REACTION_FILE):
     wb = openpyxl.Workbook()
     ws = wb.create_sheet(0, "Reactions")
@@ -95,6 +118,33 @@ def serialize_reactions(path=KEGG_REACTION_FILE):
         add_values(ws, row, 1, [rn.replace('rn:', '').strip(), name, definition, equation, ec, orthology])
         row += 1
     wb.save(path)
+
+
+def serialize_compounds(path=KEGG_COMPOUND_FILE):
+    wb = openpyxl.Workbook()
+    ws = wb.create_sheet(0, "Compounds")
+    add_values(ws, 1, 1, ["Id", "Name", "Formula"], HEADER_STYLE)
+    row = 2
+    cpds = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/compound').read().split("\n") if
+             it.find('cpd:') != -1}
+    for cpd in cpds:
+        names, formula = get_kegg_c_info(cpd)
+        add_values(ws, row, 1, [cpd.replace('cpd:', '').strip(), '; '.join(names), formula])
+        row += 1
+    wb.save(path)
+
+
+def get_formula2kegg_compound(path=KEGG_COMPOUND_FILE):
+    formula2kegg = {}
+    # there are following columns: "Id", "Name", "Formula",
+    # but we are only interested in kegg id (1) and formula (3)
+    for (kegg, formula) in get_info(path, [1, 3], 2):
+        if not formula:
+            continue
+        kegg, formula = str(kegg), str(formula)
+        if formula:
+            formula2kegg[formula] = kegg
+    return formula2kegg
 
 
 def get_rs_ps_by_kegg_equation(equation, stoichiometry=False):
@@ -166,4 +216,4 @@ def get_rn2name(path=KEGG_REACTION_FILE):
     return rn2name
 
 
-
+# serialize_compounds()

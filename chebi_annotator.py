@@ -1,11 +1,11 @@
 from collections import defaultdict
 import os
 
-from libsbml import Species, BQB_IS, BQB_IS_VERSION_OF
+import libsbml
 
 import misc
 from obo_ontology import miriam_to_term_id, to_identifiers_org_format
-from sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id
+from sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id, get_formula
 
 
 __author__ = 'anna'
@@ -22,11 +22,11 @@ def get_chebi():
 
 
 def get_is_annotations(entity):
-    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, BQB_IS))
+    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, libsbml.BQB_IS))
 
 
 def get_is_vo_annotations(entity):
-    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, BQB_IS_VERSION_OF))
+    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, libsbml.BQB_IS_VERSION_OF))
 
 
 def get_term(entity, chebi):
@@ -65,67 +65,94 @@ def get_species_term(species, chebi, model):
     return term
 
 
+def find_term_id(entity, chebi):
+    term = get_term(entity, chebi)
+    if term:
+        return term.get_id()
+
+    for formula in get_formula(entity):
+        if formula and formula != '.':
+            term = chebi.get_term(formula)
+            if term:
+                return term.get_id()
+
+    kegg = get_kegg_m_id(entity)
+    if kegg:
+        t_id = chebi.get_t_id_by_kegg(kegg)
+        if t_id:
+            return t_id
+
+    return None
+
+
 def get_species_to_chebi(model, chebi, guess=True):
     species2chebi = {}
-    used_terms = set()
-    entity2species = defaultdict(set)
+    s_type_id2chebi = {}
+    unannotated = []
 
-    # process annotated ones
-    # and find those that need to be annotated
+    # process species types
+    for s_type in model.getListOfSpeciesTypes():
+        has_chebi = next((annotation for annotation in get_is_annotations(s_type) if annotation.find('chebi') != -1),
+                         None)
+        t_id = find_term_id(s_type, chebi)
+        if t_id:
+            if not has_chebi:
+                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            s_type_id2chebi[s_type.getId()] = t_id
+
+    # process species
     for species in model.getListOfSpecies():
         has_chebi = next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
                          None)
-        term = get_term(species, chebi)
-        if term and not has_chebi:
-            add_annotation(species, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
-        entity = species
-        if not term:
-            s_type_id = species.getSpeciesType()
-            if s_type_id:
-                s_type = model.getSpeciesType(s_type_id)
-                if s_type:
-                    entity = s_type
-                    has_chebi = next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
-                         None)
-                    term = get_term(s_type, chebi)
-                    if term and not has_chebi:
-                        add_annotation(entity, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
-        if term:
-            species2chebi[species.getId()] = term.get_id()
-            used_terms.add(term)
-            continue
+        s_type_id = species.getSpeciesType()
+        if s_type_id and s_type_id in s_type_id2chebi:
+            t_id = s_type_id2chebi[s_type_id]
         else:
-            entity2species[entity].add(species)
+            t_id = find_term_id(species, chebi)
+        if t_id:
+            species2chebi[species.getId()] = t_id
+            if not has_chebi:
+                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            if s_type_id and s_type_id not in s_type_id2chebi:
+                s_type_id2chebi[s_type_id] = t_id
+                add_annotation(model.getSpeciesType(s_type_id), libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+        else:
+            unannotated.append(species)
+    s_t_id2unannotated = defaultdict(list)
+    for species in unannotated:
+        s_type_id = species.getSpeciesType()
+        if s_type_id and s_type_id in s_type_id2chebi:
+            t_id = s_type_id2chebi[s_type_id]
+            species2chebi[species.getId()] = t_id
+            add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+        else:
+            if s_type_id:
+                s_t_id2unannotated[s_type_id].append(species)
+            else:
+                s_t_id2unannotated[species.getId()].append(species)
+
+    # annotate unannotated
     if guess:
-        # annotate unannotated
-        for entity, species_set in entity2species.iteritems():
-            possibilities = set()
-            kegg_ids = {it for it in {get_kegg_m_id(entity)} | {get_kegg_m_id(species) for species in species_set} if
-                        it}
-            for kegg in kegg_ids:
-                t_id = chebi.get_t_id_by_kegg(kegg)
-                if t_id:
-                    possibilities = {t_id}
-                    break
-            if not possibilities:
-                name, name_bis = get_names(entity)
-                if isinstance(entity, Species):
-                    index = name.lower().find(
-                        "[{0}]".format(model.getCompartment(entity.getCompartment()).getName().lower()))
-                    if -1 != index:
-                        name = name[:index].strip()
-                possibilities = chebi.get_ids_by_name(name)
-                if not possibilities:
-                    possibilities = chebi.get_ids_by_name(name_bis)
-            if not possibilities:
+        for s_t_id, species_list in s_t_id2unannotated.iteritems():
+            s_type = model.getSpeciesType(s_t_id)
+            name = ''
+            if s_type:
+                name = normalize(s_type.getName())
+            if not name:
+                species = species_list[0]
+                c_name = normalize("[{0}]".format(model.getCompartment(species.getCompartment()).getName()))
+                name = normalize(species.getName()).replace(c_name, '').strip()
+            if not name:
                 continue
-            possibilities = {chebi.get_term(it) for it in possibilities}
-            intersection = possibilities & used_terms
-            term = intersection.pop() if intersection else possibilities.pop()
-            for species in species_set:
-                species2chebi[species.getId()] = term.get_id()
-            add_annotation(entity, BQB_IS, to_identifiers_org_format(term.get_id(), "obo.chebi"))
-            used_terms.add(term)
+            t_ids = chebi.get_ids_by_name(name)
+            if not t_ids:
+                continue
+            t_id = t_ids.pop()
+            for species in species_list:
+                species2chebi[species.getId()] = t_id
+                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            if s_type:
+                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
     return species2chebi
 
 

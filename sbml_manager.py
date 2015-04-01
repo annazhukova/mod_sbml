@@ -19,6 +19,8 @@ GA_PREFIX = "GENE_ASSOCIATION:"
 
 PATHWAY_PREFIX = "SUBSYSTEM:"
 
+FORMULA_PREFIX = "FORMULA:"
+
 
 def get_annotation_term_of_type(element, qualifier_type):
     cv_terms = element.getCVTerms()
@@ -109,6 +111,20 @@ def get_subsystem2r_ids(sbml=None, model=None):
         if not result:
             no_pathway_r_ids.add(r.getId())
     return subsystem2r_ids, no_pathway_r_ids
+
+
+def get_formula(species):
+    result = set()
+    node = species.getNotes()
+    _get_prefixed_notes_value(node, result, FORMULA_PREFIX)
+    return result
+
+
+def get_subsystem(reaction):
+    result = set()
+    node = reaction.getNotes()
+    _get_prefixed_notes_value(node, result, PATHWAY_PREFIX)
+    return result
 
 
 def get_pathway2r_ids(sbml=None, model=None):
@@ -228,17 +244,18 @@ def get_metabolites(reaction, stoichiometry=False):
     return set(get_reactants(reaction, stoichiometry)) | set(get_products(reaction, stoichiometry))
 
 
-def get_r_comp(r_id, model):
+def get_r_comps(r_id, model):
     r = model.getReaction(r_id)
     return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r)}
 
 
 def create_species(model, compartment_id, name=None, bound=False, id_=None):
     new_species = model.createSpecies()
-    id_ = generate_unique_id(model, id_)
+    id_ = generate_unique_id(model, id_ if id_ else "s")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
         logging.error("species  %s creation error" % id_)
-    new_species.setName(name)
+    if name:
+        new_species.setName(name)
     new_species.setCompartment(compartment_id)
     new_species.setSBOTerm(SBO_MATERIAL_ENTITY)
     new_species.setBoundaryCondition(bound)
@@ -247,7 +264,7 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None):
 
 def create_compartment(model, name, outside=None, term_id=None, id_=None):
     new_comp = model.createCompartment()
-    id_ = generate_unique_id(model, id_ if id_ else "c_new")
+    id_ = generate_unique_id(model, id_ if id_ else "c")
     new_comp.setId(id_)
     new_comp.setName(name)
     if outside:
@@ -334,3 +351,46 @@ def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
         print(s.name, s.id)
 
     return r_ids
+
+
+def create_reaction(model, rs, ps, name=None, reversible=True, _id=None):
+    def add_r_elements(elements, creator):
+        for (m_id, st) in elements:
+            element = creator()
+            element.setSpecies(m_id)
+            element.setStoichiometry(st)
+
+    r = model.createReaction()
+    r_id = generate_unique_id(model, _id if _id else 'r')
+    r.setName(name)
+    r.setReversible(reversible)
+    if libsbml.LIBSBML_OPERATION_SUCCESS != r.setId(r_id):
+        logging.error("reaction  ", r_id, " creation error")
+    add_r_elements(rs, r.createReactant)
+    add_r_elements(ps, r.createProduct)
+
+
+def find_reaction_by_reactant_product_names(model, r_name, p_name):
+    r_name, p_name = r_name.lower(), p_name.lower()
+    for r in model.getListOfReactions():
+        r_found, p_found, rev = False, False, False
+        for m in (model.getSpecies(s_id) for s_id in get_reactants(r)):
+            if m.name.lower().find(r_name) != -1:
+                r_found = True
+                break
+            if m.name.lower().find(p_name) != -1:
+                r_found = True
+                rev = True
+                break
+        if not r_found:
+            continue
+        for m in (model.getSpecies(s_id) for s_id in get_products(r)):
+            if rev and m.name.lower().find(r_name) != -1:
+                p_found = True
+                break
+            if not rev and m.name.lower().find(p_name) != -1:
+                p_found = True
+                break
+        if p_found:
+            return r
+    return None

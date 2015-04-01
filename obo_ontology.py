@@ -235,7 +235,8 @@ class Term:
         return result
 
     def add_kegg(self, kegg):
-        self.kegg.add(kegg)
+        if kegg:
+            self.kegg.add(kegg.lower().strip())
 
     def get_kegg_ids(self):
         return set(self.kegg)
@@ -299,7 +300,7 @@ class Ontology:
         names.add(term.get_name())
         for kegg in term.get_kegg_ids():
             if kegg:
-                self.kegg2term_id[kegg] = t_id
+                self.kegg2term_id[kegg.lower().strip()] = t_id
         for name in names:
             name = name.lower().strip()
             self.name2term_ids[name].add(t_id)
@@ -520,6 +521,8 @@ class Ontology:
         return set(self.name2term_ids[name]) if name in self.name2term_ids else set()
 
     def get_t_id_by_kegg(self, kegg):
+        if kegg:
+            kegg = kegg.lower().strip()
         if kegg in self.kegg2term_id:
             return self.kegg2term_id[kegg]
         return None
