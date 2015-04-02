@@ -113,7 +113,7 @@ def get_subsystem2r_ids(sbml=None, model=None):
     return subsystem2r_ids, no_pathway_r_ids
 
 
-def get_formula(species):
+def get_formulas(species):
     result = set()
     node = species.getNotes()
     _get_prefixed_notes_value(node, result, FORMULA_PREFIX)

@@ -5,7 +5,7 @@ import libsbml
 
 import misc
 from obo_ontology import miriam_to_term_id, to_identifiers_org_format
-from sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id, get_formula
+from sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id, get_formulas
 
 
 __author__ = 'anna'
@@ -70,7 +70,7 @@ def find_term_id(entity, chebi):
     if term:
         return term.get_id()
 
-    for formula in get_formula(entity):
+    for formula in get_formulas(entity):
         if formula and formula != '.':
             term = chebi.get_term(formula)
             if term:
