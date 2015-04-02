@@ -1,8 +1,9 @@
-import logging
 import urllib2
-import datetime
+
 import openpyxl
-from xlsx_helper import save_data, HEADER_STYLE, add_values, get_info
+
+from serialization.xlsx_helper import HEADER_STYLE, add_values, get_info
+
 
 KEGG_REACTION_FILE = "/home/anna/Documents/IBGC/Models/KEGG_reactions.xlsx"
 KEGG_COMPOUND_FILE = "/home/anna/Documents/IBGC/Models/KEGG_compounds.xlsx"
