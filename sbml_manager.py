@@ -94,6 +94,26 @@ def get_gene_association(reaction):
         return result.pop()
 
 
+def get_genes(reaction):
+    return gene_association2genes(get_gene_association(reaction))
+
+
+def gene_association2genes(gene_association):
+    genes = []
+    if gene_association:
+        for g0 in gene_association.split('('):
+            for g1 in g0.split(')'):
+                for g2 in g1.split('and'):
+                    for g3 in g2.split('or'):
+                        for g4 in g3.split('xor'):
+                            for g5 in g4.split('not'):
+                                g5 = g5.replace(' ', '')
+                                if g5:
+                                    genes.append(g5)
+    genes.sort()
+    return genes
+
+
 def get_subsystem2r_ids(sbml=None, model=None):
     subsystem2r_ids = defaultdict(set)
     no_pathway_r_ids = set()
@@ -279,6 +299,8 @@ def generate_unique_id(model, id_=None):
         id_ = "new_"
     else:
         id_ = ''.join(e for e in id_ if e.isalnum())
+        if id_[0].isdigit():
+            id_ = 's_' + id_
         if not model.getElementBySId(id_):
             return id_
     i = 0
