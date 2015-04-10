@@ -336,10 +336,10 @@ def submodel(r_ids_to_keep, model):
     for c_id in c_ids_to_keep:
         while c_id:
             c_id = model.getCompartment(c_id).getOutside()
-            if c_id and not c_id in c_ids_to_keep | c_ids_to_add:
+            if c_id and c_id not in c_ids_to_keep | c_ids_to_add:
                 c_ids_to_add.add(c_id)
     c_ids_to_keep |= c_ids_to_add
-    for c_id in [c.id for c in model.getListOfCompartments() if not c.id in c_ids_to_keep]:
+    for c_id in [c.id for c in model.getListOfCompartments() if c.id not in c_ids_to_keep]:
         model.removeCompartment(c_id)
 
 
