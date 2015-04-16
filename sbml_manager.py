@@ -390,6 +390,7 @@ def create_reaction(model, rs, ps, name=None, reversible=True, _id=None):
         logging.error("reaction  ", r_id, " creation error")
     add_r_elements(rs, r.createReactant)
     add_r_elements(ps, r.createProduct)
+    return r
 
 
 def find_reaction_by_reactant_product_names(model, r_name, p_name):
