@@ -1,10 +1,12 @@
 import libsbml
+
 from annotation.annotation_manager import infer_reaction_kegg_from_compounds_kegg
 from chebi_annotator import get_chebi, get_species_to_chebi
 from kegg.reaction_manager import get_formula2kegg_compound
 from model_comparison.model_matcher import group_metabolites
-from obo_ontology import parse
-from sbml_manager import get_kegg_m_id, add_annotation
+from onto.obo_ontology import parse
+from sbml.sbml_manager import get_kegg_m_id, add_annotation
+
 
 __author__ = 'anna'
 
