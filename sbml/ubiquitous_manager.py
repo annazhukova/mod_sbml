@@ -1,6 +1,6 @@
 from collections import Counter
+from onto.chebi_annotator import CONJUGATE_ACID_BASE_RELATIONSHIPS, get_chebi, get_species_to_chebi, get_cofactors
 
-from chebi_annotator import get_species_to_chebi, CONJUGATE_ACID_BASE_RELATIONSHIPS, get_chebi, get_cofactors
 from onto.obo_ontology import parse
 from sbml.sbml_manager import get_metabolites
 

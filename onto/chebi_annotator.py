@@ -16,6 +16,8 @@ COFACTOR_CHEBI_ID = 'chebi:23357'
 
 CONJUGATE_ACID_BASE_RELATIONSHIPS = {'is_conjugate_base_of', 'is_conjugate_acid_of'}
 
+EQUIVALENT_RELATIONSHIPS = CONJUGATE_ACID_BASE_RELATIONSHIPS | {'is_tautomer_of'}
+
 
 def get_chebi():
     return "%s/data/chebi.obo" % os.path.dirname(os.path.abspath(misc.__file__))
@@ -169,11 +171,20 @@ def get_cofactors(onto):
         subj, rel, obj = it
         if rel == HAS_ROLE_RELATIONSHIP and is_cofactor(obj):
             subj_term = onto.get_term(subj)
-            children = {t.get_id() for t in
-                        onto.get_generalized_descendants(subj_term, False, set(), CONJUGATE_ACID_BASE_RELATIONSHIPS)}
-            equals = {t.get_id() for t in onto.get_equivalents(subj_term, CONJUGATE_ACID_BASE_RELATIONSHIPS)}
-            cofactors |= {subj} | children | equals
+            for t in onto.get_generalized_descendants(subj_term, False, set(), CONJUGATE_ACID_BASE_RELATIONSHIPS):
+                cofactors |= t.get_all_ids()
+            for t in onto.get_equivalents(subj_term, CONJUGATE_ACID_BASE_RELATIONSHIPS):
+                cofactors |= t.get_all_ids()
+            cofactors |= subj_term.get_all_ids()
     return cofactors
+
+
+def add_equivalent_chebi_ids(onto, chebi_ids):
+    return reduce(lambda s1, s2: s1 | s2,
+                  (reduce(lambda s1, s2: s1 | s2,
+                          (it.get_all_ids() for it in onto.get_equivalents(t, relationships=EQUIVALENT_RELATIONSHIPS)),
+                          t.get_all_ids())
+                   for t in (onto.get_term(ub_id) for ub_id in chebi_ids)), chebi_ids)
 
 
 

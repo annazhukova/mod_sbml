@@ -6,6 +6,7 @@ from openpyxl.styles.colors import Color
 BASIC_STYLE = Style(font=Font(color=openpyxl.styles.colors.BLACK, sz=8))
 RED_STYLE = Style(font=Font(color=openpyxl.styles.colors.RED, sz=8))
 BLUE_STYLE = Style(font=Font(color=openpyxl.styles.colors.BLUE, sz=8))
+GREEN_STYLE = Style(font=Font(color=openpyxl.styles.colors.GREEN, sz=8))
 BOLD_STYLE = Style(font=Font(bold=True, sz=8))
 HEADER_STYLE = BOLD_STYLE
 
