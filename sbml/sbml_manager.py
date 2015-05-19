@@ -51,6 +51,13 @@ def add_annotation(element, qualifier, annotation):
         term.addResource(annotation)
 
 
+def remove_annotation(element, qualifier, annotation):
+    if not element.isSetMetaId():
+        element.setMetaId("m_{0}".format(element.getId()))
+    for term in get_annotation_term_of_type(element, qualifier):
+        term.removeResource(annotation)
+
+
 def miriam_to_term_id(urn):
     urn = urn.strip()
     miriam_prefix = URN_MIRIAM
@@ -293,6 +300,21 @@ def create_compartment(model, name, outside=None, term_id=None, id_=None):
     if term_id:
         add_annotation(new_comp, libsbml.BQB_IS, to_identifiers_org_format(term_id, "obo.go"))
     return new_comp
+
+
+def reverse_reaction(r):
+    rs = list(r.getListOfReactants())
+    ps = list(r.getListOfProducts())
+    for m in rs:
+        new_m = r.createProduct()
+        new_m.setSpecies(m.getSpecies())
+        new_m.setStoichiometry(m.getStoichiometry())
+        r.removeReactant(m.getSpecies())
+    for m in ps:
+        new_m = r.createReactant()
+        new_m.setSpecies(m.getSpecies())
+        new_m.setStoichiometry(m.getStoichiometry())
+        r.removeProduct(m.getSpecies())
 
 
 def generate_unique_id(model, id_=None):

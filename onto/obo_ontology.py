@@ -2,7 +2,7 @@
 # encoding: utf-8
 from collections import defaultdict
 
-from misc import remove_from_map
+from utils.misc import remove_from_map
 
 
 URN_MIRIAM = "urn:miriam:"

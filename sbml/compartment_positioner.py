@@ -1,5 +1,4 @@
-from libsbml import BQB_IS, BQB_IS_VERSION_OF
-
+import libsbml
 from onto.obo_ontology import miriam_to_term_id
 from sbml.sbml_manager import get_qualifier_values, create_compartment
 
@@ -40,9 +39,9 @@ def get_comp2go(model, onto):
     comp2go = {}
     for comp in model.getListOfCompartments():
         annotation = comp.getAnnotation()
-        term = get_go_term(annotation, BQB_IS, onto)
+        term = get_go_term(annotation, libsbml.BQB_IS, onto)
         if not term:
-            term = get_go_term(annotation, BQB_IS_VERSION_OF, onto)
+            term = get_go_term(annotation, libsbml.BQB_IS_VERSION_OF, onto)
         if not term:
             term_ids = onto.get_ids_by_name(comp.getName())
             if term_ids:
@@ -66,9 +65,9 @@ def comp2level(model, onto):
         for comp in model.getListOfCompartments():
             annotation = comp.getAnnotation()
             if annotation:
-                term = get_go_term(annotation, BQB_IS, onto)
+                term = get_go_term(annotation, libsbml.BQB_IS, onto)
                 if not term:
-                    term = get_go_term(annotation, BQB_IS_VERSION_OF, onto)
+                    term = get_go_term(annotation, libsbml.BQB_IS_VERSION_OF, onto)
                 if term:
                     term2comp[term] = comp
                     continue

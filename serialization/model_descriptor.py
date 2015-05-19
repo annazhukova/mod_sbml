@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from chebi_annotator import get_chebi, get_species_to_chebi
+from onto.chebi_annotator import get_chebi, get_species_to_chebi
 from kegg.pathway_manager import get_pw_name
 from kegg.reaction_manager import get_formula2kegg_compound
 from model_comparison.model_matcher import group_metabolites, group_rs

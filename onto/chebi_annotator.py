@@ -3,7 +3,7 @@ import os
 
 import libsbml
 
-import misc
+from utils import misc
 from onto.obo_ontology import miriam_to_term_id, to_identifiers_org_format
 from sbml.sbml_manager import get_qualifier_values, add_annotation, get_kegg_m_id, get_formulas
 

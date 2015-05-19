@@ -2,9 +2,9 @@ import os
 import urllib2
 
 import openpyxl
-from kegg.pathway_manager import p_id_specific2generic
-import misc
 
+from kegg.pathway_manager import p_id_specific2generic
+from utils import misc
 from serialization.xlsx_helper import HEADER_STYLE, add_values, get_info
 
 
