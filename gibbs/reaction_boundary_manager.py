@@ -219,7 +219,7 @@ def get_bounds(r, infinity=1000):
     if not lb:
         lb = k_law.createParameter()
         lb.setId("LOWER_BOUND")
-        lb.setValue(0)
+        lb.setValue(-infinity if r.getReversible() else 0)
         lb.setUnits("mumol_per_gDW_per_min")
     r_lower_bound = lb.getValue()
 
