@@ -29,5 +29,5 @@ setup(name='mod_sbml',
           'License :: GNU GENERAL PUBLIC LICENSE',
           'Topic :: Systems Biology',
           'Topic :: Software Development',
-      ], requires=['openpyxl', 'libsbml', 'numpy', 'matplotlib']
+      ], requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib']
 )
