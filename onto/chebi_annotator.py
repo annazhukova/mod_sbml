@@ -20,7 +20,7 @@ EQUIVALENT_RELATIONSHIPS = CONJUGATE_ACID_BASE_RELATIONSHIPS | {'is_tautomer_of'
 
 
 def get_chebi():
-    return "%s/data/chebi.obo" % os.path.dirname(os.path.abspath(misc.__file__))
+    return "%s/../data/chebi.obo" % os.path.dirname(os.path.abspath(misc.__file__))
 
 
 def get_is_annotations(entity):

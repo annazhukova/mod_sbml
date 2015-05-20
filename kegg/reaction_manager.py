@@ -8,8 +8,8 @@ from utils import misc
 from serialization.xlsx_helper import HEADER_STYLE, add_values, get_info
 
 
-KEGG_REACTION_FILE = "%s/data/KEGG_reactions.xlsx" % os.path.dirname(os.path.abspath(misc.__file__))
-KEGG_COMPOUND_FILE = "%s/data/KEGG_compounds.xlsx" % os.path.dirname(os.path.abspath(misc.__file__))
+KEGG_REACTION_FILE = "%s/../data/KEGG_reactions.xlsx" % os.path.dirname(os.path.abspath(misc.__file__))
+KEGG_COMPOUND_FILE = "%s/../data/KEGG_compounds.xlsx" % os.path.dirname(os.path.abspath(misc.__file__))
 
 
 def get_rns_by_elements(elements):
