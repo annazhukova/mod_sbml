@@ -253,7 +253,7 @@ def serialize_efms(sbml, efms, path, r_id2style=basic_r_style,
             lb, ub = get_bounds(r)
             comps = ", ".join(sorted((model.getCompartment(c_id).name for c_id in get_r_comps(r_id, model))))
             data.append([r.id, r.name, get_sbml_r_formula(model, r, False), get_kegg_r_id(r), get_gene_association(r),
-                         lb, ub, r_id2coefficients[r_id], comps])
+                         lb, ub, ','.join(sorted(get_r_comps(r.id, model))), r_id2coefficients[r_id], comps])
             styles.append(r_id2style(r.id))
         r_ids = set(r_id2coefficients.iterkeys())
         save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Low. B.", "Upp. B.", "Compartments", "Coefficients"],

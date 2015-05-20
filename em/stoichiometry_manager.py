@@ -27,23 +27,22 @@ def stoichiometric_matrix(model, path):
             if u_b > 0:
                 l = i
                 i += 1
-                for (m_id, st) in get_reactants(r, True):
-                    if m_id in s_id2i:
-                        f.write("%d,%d,%d\n" % (s_id2i[m_id], l, -st))
-                for (m_id, st) in get_products(r, True):
-                    if m_id in s_id2i:
-                        f.write("%d,%d,%d\n" % (s_id2i[m_id], l, st))
+                add_reaction_data(f, l, r, s_id2i)
             if l_b < 0:
                 u = i
                 i += 1
-                for (m_id, st) in get_reactants(r, True):
-                    if m_id in s_id2i:
-                        f.write("%d,%d,%d\n" % (s_id2i[m_id], u, st))
-                for (m_id, st) in get_products(r, True):
-                    if m_id in s_id2i:
-                        f.write("%d,%d,%d\n" % (s_id2i[m_id], u, -st))
+                add_reaction_data(f, u, r, s_id2i, reversed=True)
             r_id2i[r.id] = (l, u)
     return s_id2i, r_id2i
+
+
+def add_reaction_data(file, reaction_number, reaction, m_id2i, reversed=False):
+    for (m_id, st) in get_reactants(reaction, True):
+        if m_id in m_id2i:
+            file.write("%d,%d,%d\n" % (m_id2i[m_id], reaction_number, st if reversed else -st))
+    for (m_id, st) in get_products(reaction, True):
+        if m_id in m_id2i:
+            file.write("%d,%d,%d\n" % (m_id2i[m_id], reaction_number, -st if reversed else st))
 
 
 # def ems2binary(in_path, r_id2i):

@@ -8,6 +8,15 @@ import libsbml
 
 from em.em_manager import perform_efma
 
+LINE_END = ' .'
+
+ENTITY_IDENTIFIER_DELIMITER = ' '
+
+REACTANT_PRODUCT_DELIMITER = ' = '
+
+R_ID_FORMULA_DELIMITER = ' : '
+
+METABOLITE_STOICHIOMETRY_DELIMITER = ' '
 
 help_message = '''
 Converts a model in dat format into SBML and (optionally) performs EFM analysis on it.
@@ -34,49 +43,65 @@ R_DESCR = "-CAT"
 HEADERS = [R_REV, R_IRREV, M_INT, M_EXT, R_DESCR]
 
 
-def convert_metabolite(m_id, c_id, model, boundary=False):
+def convert_metabolite(m_id, c_id, model, boundary=False, create_boundary_reaction=False):
     if m_id:
-        if m_id[0].isdigit():
-            m_id = 's_' + m_id
+        m_name = m_id
+        m_id = normalize_id(m_id)
         s = model.createSpecies()
         s.setId(m_id)
+        s.setName(m_name)
         s.setCompartment(c_id)
-        s.setBoundaryCondition(boundary)
+        if boundary:
+            if create_boundary_reaction:
+                s = model.createSpecies()
+                s.setId(m_id + '_b')
+                s.setName(m_name)
+                s.setCompartment(c_id)
+                convert_reaction(model, 'r_%s_%s' % (m_id, s.getId()), True, ((m_id, 1),), ((s.getId(), 1),))
+            s.setBoundaryCondition(boundary)
 
 
 def normalize_id(id_, prefix='s_'):
+    id_ = ''.join(e for e in id_ if e.isalnum())
     if id_[0].isdigit():
         id_ = prefix + id_
     return id_
 
 
-def add_metabolites_to_reaction(r, ms, is_reactant=True):
-    for m_id in ms:
-        m_id = m_id.strip()
-        if m_id.find(' ') != -1:
-            st, m_id = m_id.split(' ')
-            st = float(st)
-        else:
-            st = 1
-        m_id = normalize_id(m_id)
+def add_metabolites_to_reaction(r, m_id2st, is_reactant=True):
+    for m_id, st in m_id2st:
         sr = r.createReactant() if is_reactant else r.createProduct()
         sr.setSpecies(m_id)
         sr.setStoichiometry(st)
 
 
-def convert_reaction(model, r_id, rev, rs, ps):
-    r = model.createReaction()
-    r_id = normalize_id(r_id, 'r_')
-    r.setId(r_id)
-    r.setReversible(rev)
-    add_metabolites_to_reaction(r, rs, is_reactant=True)
-    add_metabolites_to_reaction(r, ps, is_reactant=False)
+def extract_m_id_stoichiometry_pairs(ms):
+    for m_id in ms.split(' + '):
+        m_id = m_id.strip()
+        if m_id.find(METABOLITE_STOICHIOMETRY_DELIMITER) != -1:
+            st, m_id = m_id.split(METABOLITE_STOICHIOMETRY_DELIMITER)
+            st = float(st)
+        else:
+            st = 1
+        m_id = normalize_id(m_id)
+        yield m_id, st
 
 
-def convert_dat2sbml(in_dat, out_sbml):
-    file_name, file_extension = os.path.splitext(os.path.basename(in_dat))
-    if file_name and file_name[0].isdigit():
-        file_name = 'M_' + file_name
+def convert_reaction(model, r_id, rev, r_m_id2st, p_m_id2st):
+    if r_id and (r_m_id2st or p_m_id2st):
+        r = model.createReaction()
+        r_name = r_id
+        r_id = normalize_id(r_id, 'r_')
+        r.setId(r_id)
+        r.setName(r_name)
+        r.setReversible(rev)
+        add_metabolites_to_reaction(r, r_m_id2st, is_reactant=True)
+        add_metabolites_to_reaction(r, p_m_id2st, is_reactant=False)
+
+
+def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
+    file_name, _ = os.path.splitext(os.path.basename(in_dat))
+    file_name = normalize_id(file_name, 'M_') if file_name else 'Model'
     document = libsbml.SBMLDocument(2, 4)
     model = document.createModel()
     model.setId(file_name)
@@ -95,21 +120,21 @@ def convert_dat2sbml(in_dat, out_sbml):
             if not mode:
                 continue
             if R_REV == mode:
-                r_ids_rev = set(line.split(' '))
+                r_ids_rev = set(line.split(ENTITY_IDENTIFIER_DELIMITER))
             elif R_IRREV == mode:
                 continue
             elif M_INT == mode:
-                for m_id in set(line.split(' ')):
+                for m_id in set(line.split(ENTITY_IDENTIFIER_DELIMITER)):
                     convert_metabolite(m_id, c.getId(), model)
             elif M_EXT == mode:
-                for m_id in set(line.split(' ')):
-                    convert_metabolite(m_id, c.getId(), model, True)
+                for m_id in set(line.split(ENTITY_IDENTIFIER_DELIMITER)):
+                    convert_metabolite(m_id, c.getId(), model, True, create_boundary_reaction=create_boundary_reaction)
             elif R_DESCR == mode:
-                line = line.replace(' .', '')
-                r_id, formula = line.split(' : ')
-                rs, ps = formula.split(' = ')
-                rs, ps = rs.split(' + '), ps.split(' + ')
-                convert_reaction(model, r_id, r_id in r_ids_rev, rs, ps)
+                line = line.replace(LINE_END, '')
+                r_id, formula = line.split(R_ID_FORMULA_DELIMITER)
+                rs, ps = formula.split(REACTANT_PRODUCT_DELIMITER)
+                convert_reaction(model, r_id, r_id in r_ids_rev, extract_m_id_stoichiometry_pairs(rs),
+                                 extract_m_id_stoichiometry_pairs(ps))
     libsbml.SBMLWriter().writeSBMLToFile(document, out_sbml)
 
 
