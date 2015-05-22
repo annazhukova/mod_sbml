@@ -5,8 +5,9 @@ from os.path import dirname, abspath, basename
 import sys
 
 import libsbml
+import re
 
-from em.em_manager import perform_efma
+from em.em_manager import perform_efma, classify_efms, serialize_efms
 
 LINE_END = ' .'
 
@@ -53,12 +54,9 @@ def convert_metabolite(m_id, c_id, model, boundary=False, create_boundary_reacti
         s.setCompartment(c_id)
         if boundary:
             if create_boundary_reaction:
-                s = model.createSpecies()
-                s.setId(m_id + '_b')
-                s.setName(m_name)
-                s.setCompartment(c_id)
-                convert_reaction(model, 'r_%s_%s' % (m_id, s.getId()), True, ((m_id, 1),), ((s.getId(), 1),))
-            s.setBoundaryCondition(boundary)
+                convert_reaction(model, 'r_%s_in_out' % m_id, True, ((m_id, 1),), ())
+            else:
+                s.setBoundaryCondition(boundary)
 
 
 def normalize_id(id_, prefix='s_'):
@@ -99,7 +97,48 @@ def convert_reaction(model, r_id, rev, r_m_id2st, p_m_id2st):
         add_metabolites_to_reaction(r, p_m_id2st, is_reactant=False)
 
 
+def convert_metatool_output2efm(metatool_file, sorted_r_ids):
+    """
+    Extracts the EFM information from a given output file of Metatool
+    and converts them to an inner format: list of EFMs represented as dictionaries of r_id: coefficient,
+    i.e. [{r_id: coefficient, ...}, ...]
+    :param metatool_file: output file produced by Metatool
+    :param sorted_r_ids: list of reaction ids, in the same order as in the input .dat file given to Metatool,
+    reversible reactions followed by irreversible.
+    :return: list of EFMs represented as dictionaries of r_id: coefficient,
+    i.e. [{r_id: coefficient, ...}, ...]
+    """
+    efms = []
+    with open(metatool_file, 'r') as f:
+        line = next(f)
+        while -1 == line.find('ELEMENTARY MODES'):
+            line = next(f)
+        line = next(f)
+        while -1 == line.find('matrix dimension'):
+            line = next(f)
+        line = next(f)
+        while -1 == line.find('reactions (columns) are sorted in the same order as in the ENZREV ENZIRREV section'):
+            line = line.replace('\n', '').strip()
+            if line:
+                coefficients = re.findall(r"[-+]?\d*\.*\d+", line)
+                efm = {r_id: float(c) for (r_id, c) in zip(sorted_r_ids, coefficients) if float(c) != 0}
+                efms.append(efm)
+            line = next(f)
+    return efms
+
+
 def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
+    """
+    Converts a .dat file with the model (in the format accepted by Metatool) into SBML.
+    :param in_dat: input .dat file
+    :param out_sbml: path where to save the output SBML file
+    :param create_boundary_reaction: set to False if you want the external metabolites to be marked as boundary;
+    set to True if you want the external metabolites to considered as internal
+    with fake input/output reactions (M ->; -> M) added;
+    :return: list of reaction ids, in the same order as in the input .dat file,
+    reversible reactions followed by irreversible.
+    """
+    logging.info("Converting %s to SBML..." % in_dat)
     file_name, _ = os.path.splitext(os.path.basename(in_dat))
     file_name = normalize_id(file_name, 'M_') if file_name else 'Model'
     document = libsbml.SBMLDocument(2, 4)
@@ -109,6 +148,7 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
     c.setId('c')
     mode = None
     r_ids_rev = set()
+    r_rev_ids, r_irrev_ids = [], []
     with open(in_dat, 'r') as f:
         for line in f:
             line = line.replace('\n', '').strip()
@@ -120,9 +160,10 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
             if not mode:
                 continue
             if R_REV == mode:
-                r_ids_rev = set(line.split(ENTITY_IDENTIFIER_DELIMITER))
+                r_rev_ids = line.split(ENTITY_IDENTIFIER_DELIMITER)
+                r_ids_rev = set(r_rev_ids)
             elif R_IRREV == mode:
-                continue
+                r_irrev_ids = line.split(ENTITY_IDENTIFIER_DELIMITER)
             elif M_INT == mode:
                 for m_id in set(line.split(ENTITY_IDENTIFIER_DELIMITER)):
                     convert_metabolite(m_id, c.getId(), model)
@@ -136,15 +177,17 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
                 convert_reaction(model, r_id, r_id in r_ids_rev, extract_m_id_stoichiometry_pairs(rs),
                                  extract_m_id_stoichiometry_pairs(ps))
     libsbml.SBMLWriter().writeSBMLToFile(document, out_sbml)
+    logging.info("...%s converted to %s" % (in_dat, out_sbml))
+    return r_rev_ids + r_irrev_ids
 
 
 def process_args(argv):
     try:
-        opts, args = getopt.getopt(argv[1:], "m:r:h:v:d:t",
-                                   ["help", "motif=", "reaction=", "verbose", "dat=", "tree="])
+        opts, args = getopt.getopt(argv[1:], "m:r:h:v:d:t:e",
+                                   ["help", "motif=", "reaction=", "verbose", "dat=", "tree=", "efm="])
     except getopt.error, msg:
         raise Usage(msg)
-    dat, r_id, verbose, motif_len, tree = None, None, False, 2, None
+    dat, r_id, verbose, motif_len, tree, efm = None, None, False, 2, None, None
     # option processing
     for option, value in opts:
         if option in ("-h", "--help"):
@@ -159,30 +202,39 @@ def process_args(argv):
             motif_len = int(value)
         if option in ("-t", "--tree"):
             tree = value
-    if not dat or (r_id and not tree):
+        if option in ("-e", "--efm"):
+            efm = value
+    if not dat:
         raise Usage(help_message)
     model_dir = dirname(abspath(dat))
     sbml = '%s/%s.xml' % (model_dir, os.path.splitext(basename(dat))[0])
-    return dat, r_id, sbml, model_dir, verbose, motif_len, tree
+    return dat, r_id, sbml, model_dir, verbose, motif_len, tree, efm
 
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
     try:
-        dat, r_id, sbml, model_dir, verbose, motif_len, tree = process_args(argv)
+        dat, r_id, sbml, model_dir, verbose, motif_len, tree, efm_file = process_args(argv)
     except Usage, err:
         print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
         print >> sys.stderr, "\t for help use --help"
         return 2
     if verbose:
         logging.basicConfig(level=logging.INFO, format='%(message)s')
-    convert_dat2sbml(dat, sbml)
-    if r_id:
+    r_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
+    if tree:
         perform_efma(sbml=sbml, in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(({r_id: False}, 1.0), ),
                      em_number=10000, min_motif_len=motif_len, model_dir=model_dir,
                      output_motif_file='%s/motifs.xlsx' % model_dir, output_efm_file='%s/efms.xlsx' % model_dir,
                      tree_efm_path=tree)
+    if efm_file:
+        efms = convert_metatool_output2efm(efm_file, r_ids)
+        if r_id:
+            efms = [efm for efm in efms if r_id in efm]
+        serialize_efms(sbml, efms, path='%s/efms.xlsx' % model_dir)
+        clusters, outliers = classify_efms(efms, min_motif_length=motif_len,
+                                           r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
 
 
 if __name__ == "__main__":

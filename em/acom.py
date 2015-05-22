@@ -28,7 +28,6 @@ def calculate_resemblance_matrix(ems, neighbour_threshold):
         i += 1
     if not neighbour_threshold:
         neighbour_threshold = round(s * 1.0 / l)
-    logging.info("%s\ncalculated resemblance matrix" % datetime.datetime.now().time())
     logging.info("using %d as neighbour threshold" % neighbour_threshold)
     return i2motif, resemblance_matrix, neighbour_threshold
 
@@ -70,8 +69,8 @@ def calculate_clusters(ems, i2motif, resemblance_matrix, min_motif_length, neigh
         if len(neighbours) > 1:
             clusters[tuple(sorted(motif))] |= neighbours
             outliers -= neighbours
-    logging.info("%s\nfound %d clusters" % (datetime.datetime.now().time(), len(clusters)))
-    logging.info("%s\ngoing to cluster %d outliers" % (datetime.datetime.now().time(), len(outliers)))
+    logging.info("found %d clusters" % len(clusters))
+    logging.info("going to cluster %d outliers" % len(outliers))
     return clusters, outliers
 
 

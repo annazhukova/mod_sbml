@@ -1,6 +1,5 @@
 import logging
 import os
-import datetime
 
 import libsbml
 import openpyxl
@@ -11,7 +10,6 @@ from gibbs.reaction_boundary_manager import get_bounds
 from sbml.sbml_manager import get_kegg_r_id, get_gene_association, get_r_comps, submodel
 from serialization.serialization_manager import get_sbml_r_formula
 from serialization.xlsx_helper import save_data, BASIC_STYLE
-
 
 basic_r_style = lambda r_id: BASIC_STYLE
 
@@ -53,23 +51,22 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     # Compute stoichiometric matrix
     st_matrix_file = "%s/st_matrix.txt" % directory
     s_id2i, r_id2i = stoichiometric_matrix(model, st_matrix_file)
-    logging.info("%s\nstoichiometric matrix saved to %s" % (datetime.datetime.now().time(), st_matrix_file))
+    logging.info("stoichiometric matrix saved to %s" % st_matrix_file)
     # Figure out in which reaction we are interested in
     if r_id not in r_id2i:
         raise ValueError("Reaction with id %s is not found in the model" % r_id)
     i = r_id2i[r_id][1] if rev else r_id2i[r_id][0]
     # Compute EFMs using TreeEFM software (Pey et al. 2014, PMID: 25380956)
     em_file = "%s/FV-EM.dat" % directory
-    os.system("%s -r %d -i %s -l EM -e %d -o %s" % (tree_efm_path, i, st_matrix_file, em_number, directory))
+    os.system("%s -r %d -i %s -l EM -e %d -o %s -h 10000" % (tree_efm_path, i, st_matrix_file, em_number, directory))
     os.system("%s -b %s" % (tree_efm_path, em_file))
     em_file = "%s.txt" % em_file
-    logging.info("%s\nelementary modes saved to %s" % (datetime.datetime.now().time(), em_file))
+    logging.info("elementary modes saved to %s" % em_file)
     # Filter EFMs so that only those that don't include the reaction in opposite directions are left.
     # If r_id2rev are specified, filter EFMs to leave only those that include these reactions in these directions.
     em_file_filtered = "%s/FV-EM_filtered.dat.txt" % directory
     efms = filter_ems(em_file, r_id2i, em_file_filtered, r_id2rev_2threshold, threshold=threshold, r_ids=r_ids)
-    logging.info("%s\n%d elementary modes corresponding to reactions of interest saved to %s" % (
-        datetime.datetime.now().time(), len(efms), em_file_filtered))
+    logging.info("%d elementary modes corresponding to reactions of interest saved to %s" % (len(efms), em_file_filtered))
     # em_file = em_file_filtered
     # efms = sorted(format_ems(em_file, r_id2i, threshold, r_ids_to_keep=r_id_of_interest), key=len)
     efms = sorted(efms, key=len)
@@ -154,20 +151,17 @@ def classify_efms(efms, min_motif_length, r_ids, neighbour_threshold=None, outpu
     # Convert EFMs to binary EFMs
     binary_ems = ems2binary(efms, r_ids)
     logging.info(
-        "%s\nelementary modes converted to %d binary vectors" % (datetime.datetime.now().time(), len(binary_ems)))
+        "elementary modes converted to %d binary vectors" % len(binary_ems))
     # Classify binary EFMs using ACoM method (Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001)
     clusters, outliers = classify(binary_ems, min_motif_length, neighbour_threshold)
-    logging.info('''%s
-    classification done
-    ---------CLUSTERS (%d)-------
-    ''' % (datetime.datetime.now().time(), len(clusters)))
+    logging.info("---------CLUSTERS (%d)-------" % len(clusters))
     clusters = {tuple(sorted((value, r_ids[index]) for (value, index) in motif)): elements for (motif, elements) in
                 clusters.iteritems()}
     for motif, elements in clusters.iteritems():
         logging.info(
             "%d %d %s %s" % (len(motif), len(elements), motif, elements))
     logging.info("---------OUTLIERS (%d)-------" % len(outliers))
-    logging.info(outliers)
+    logging.info(sorted(outliers))
 
     # Save the result to file
     if output_file and sbml:
@@ -176,12 +170,17 @@ def classify_efms(efms, min_motif_length, r_ids, neighbour_threshold=None, outpu
         wb = openpyxl.Workbook()
         i = 0
         for motif in clusters.iterkeys():
+            data, styles = [], []
+            for (direction, r_id) in motif:
+                r = model.getReaction(r_id)
+                if not r:
+                    raise ValueError('Reaction with id %s was not found in the model %s' % (r_id, model.getId()))
+                lb, ub = get_bounds(r)
+                data.append([r.id, r.name, get_sbml_r_formula(model, r, False), lb, ub, direction])
+                styles.append(r_id2style(r.id))
             save_data(["Id", "Name", "Formula", "Lower bound", "Upper bound", "Direction"],
-                      [[r.id, r.name, get_sbml_r_formula(model, r, False),
-                        get_bounds(r)[0], get_bounds(r)[1], direction]
-                       for (direction, r) in ((direction, model.getReaction(r_id)) for (direction, r_id) in motif)],
-                      wb, "Motif_%d_%d_%d.xlsx" % (i, len(motif), len(clusters[motif])), i,
-                      styles=[r_id2style(r_id) for (_, r_id) in motif])
+                      data, wb, "Motif_%d_%d_%d.xlsx" % (i, len(motif), len(clusters[motif])), i,
+                      styles=styles)
             i += 1
         wb.save(output_file)
 
@@ -253,10 +252,10 @@ def serialize_efms(sbml, efms, path, r_id2style=basic_r_style,
             lb, ub = get_bounds(r)
             comps = ", ".join(sorted((model.getCompartment(c_id).name for c_id in get_r_comps(r_id, model))))
             data.append([r.id, r.name, get_sbml_r_formula(model, r, False), get_kegg_r_id(r), get_gene_association(r),
-                         lb, ub, ','.join(sorted(get_r_comps(r.id, model))), r_id2coefficients[r_id], comps])
+                         lb, ub, r_id2coefficients[r_id], comps])
             styles.append(r_id2style(r.id))
         r_ids = set(r_id2coefficients.iterkeys())
-        save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Low. B.", "Upp. B.", "Compartments", "Coefficients"],
+        save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Low. B.", "Upp. B.", "Coefficients", "Compartments"],
                   data=data, ws_name="EM_%d_(%d)_%d_%d" % (i + 1, len(r_id2coefficients),
                                                            len(r_ids & over_expressed_r_ids),
                                                            len(r_ids & under_expressed_r_ids)),

@@ -211,37 +211,15 @@ def update_boundaries(r, kegg2ke, r_id2kegg, m2kegg, kegg2rs_ps, infinity=1000):
 
 def get_bounds(r, infinity=1000):
     k_law = r.getKineticLaw()
-    if not k_law:
-        k_law = r.createKineticLaw()
-        k_law.setFormula("FLUX_VALUE")
-
-    lb = k_law.getParameter("LOWER_BOUND")
-    if not lb:
-        lb = k_law.createParameter()
-        lb.setId("LOWER_BOUND")
-        lb.setValue(-infinity if r.getReversible() else 0)
-        lb.setUnits("mumol_per_gDW_per_min")
-    r_lower_bound = lb.getValue()
-
-    ub = k_law.getParameter("UPPER_BOUND")
-    if not ub:
-        ub = k_law.createParameter()
-        ub.setId("UPPER_BOUND")
-        ub.setValue(infinity)
-        ub.setUnits("mumol_per_gDW_per_min")
-    r_upper_bound = ub.getValue()
-
-    if not k_law.getParameter("FLUX_VALUE"):
-        fv = k_law.createParameter()
-        fv.setId("FLUX_VALUE")
-        fv.setValue(0)
-        fv.setUnits("mumol_per_gDW_per_min")
-
-    if not k_law.getParameter("OBJECTIVE_COEFFICIENT"):
-        oc = k_law.createParameter()
-        oc.setId("OBJECTIVE_COEFFICIENT")
-        ub.setValue(0)
-
+    r_lower_bound = -infinity if r.getReversible() else 0
+    r_upper_bound = infinity
+    if k_law:
+        lb = k_law.getParameter("LOWER_BOUND")
+        if lb:
+            r_lower_bound = lb.getValue()
+        ub = k_law.getParameter("UPPER_BOUND")
+        if ub:
+            r_upper_bound = ub.getValue()
     return r_lower_bound, r_upper_bound
 
 
