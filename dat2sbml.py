@@ -22,10 +22,19 @@ METABOLITE_STOICHIOMETRY_DELIMITER = ' '
 help_message = '''
 Converts a model in dat format into SBML and (optionally) performs EFM analysis on it.
 Specify the path to your model as the --dat parameter;
-If you want to perform the EFM analysis, specify a reaction that should be present in EFMs as the --reaction parameter
+
+If you want to perform the EFM calculation followed by the ACoM classification,
+specify a reaction that should be present in EFMs as the --reaction parameter
 and specify the path to your TreeEFM installation as the --tree parameter.
-You can (optionally) specify the minimal motif length as the --motif parameter.
-Usage: dat2sbml.py --dat model.dat --reaction AA2 --verbose --motif 3 --tree TreeEFMseq
+
+If you want to perform an ACoM classification of your EFMs obtained with Metatool,
+specify the path to your Metatool output file as the --efm parameter.
+If you are only interested in EFMs containing a particular reaction, specify its id as the --reaction parameter.
+
+You can (optionally) specify the minimal motif length for ACoM as the --motif parameter.
+
+Usage:  (Conversion to SBML + Calculation of EFMs + ACoM classification)            dat2sbml.py --dat model.dat --reaction AA2 --verbose --motif 3 --tree TreeEFMseq
+        (Conversion to SBML + ACoM classification of EFMs obtained with Metatool)   dat2sbml.py --dat model.dat --reaction AA2 --verbose --motif 3 --efm out-meta
 '''
 
 
@@ -233,8 +242,7 @@ def main(argv=None):
         if r_id:
             efms = [efm for efm in efms if r_id in efm]
         serialize_efms(sbml, efms, path='%s/efms.xlsx' % model_dir)
-        clusters, outliers = classify_efms(efms, min_motif_length=motif_len,
-                                           r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
+        classify_efms(efms, min_motif_length=motif_len, r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
 
 
 if __name__ == "__main__":
