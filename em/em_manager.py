@@ -175,10 +175,9 @@ def classify_efms(efms, min_motif_length, r_ids, neighbour_threshold=None, outpu
                 r = model.getReaction(r_id)
                 if not r:
                     raise ValueError('Reaction with id %s was not found in the model %s' % (r_id, model.getId()))
-                lb, ub = get_bounds(r)
-                data.append([r.id, r.name, get_sbml_r_formula(model, r, False), lb, ub, direction])
+                data.append([r.id, r.name, get_sbml_r_formula(model, r, False), direction])
                 styles.append(r_id2style(r.id))
-            save_data(["Id", "Name", "Formula", "Lower bound", "Upper bound", "Direction"],
+            save_data(["Id", "Name", "Formula", "Direction"],
                       data, wb, "Motif_%d_%d_%d.xlsx" % (i, len(motif), len(clusters[motif])), i,
                       styles=styles)
             i += 1
@@ -249,13 +248,12 @@ def serialize_efms(sbml, efms, path, r_id2style=basic_r_style,
             r = model.getReaction(r_id)
             if not r:
                 raise ValueError('Reaction with id %s was not found in the model %s' % (r_id, model.getId()))
-            lb, ub = get_bounds(r)
             comps = ", ".join(sorted((model.getCompartment(c_id).name for c_id in get_r_comps(r_id, model))))
             data.append([r.id, r.name, get_sbml_r_formula(model, r, False), get_kegg_r_id(r), get_gene_association(r),
-                         lb, ub, r_id2coefficients[r_id], comps])
+                         r_id2coefficients[r_id], comps])
             styles.append(r_id2style(r.id))
         r_ids = set(r_id2coefficients.iterkeys())
-        save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Low. B.", "Upp. B.", "Coefficients", "Compartments"],
+        save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Coefficients", "Compartments"],
                   data=data, ws_name="EM_%d_(%d)_%d_%d" % (i + 1, len(r_id2coefficients),
                                                            len(r_ids & over_expressed_r_ids),
                                                            len(r_ids & under_expressed_r_ids)),

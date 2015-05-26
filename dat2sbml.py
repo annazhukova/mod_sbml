@@ -6,8 +6,8 @@ import sys
 
 import libsbml
 import re
-
-from em.em_manager import perform_efma, classify_efms, serialize_efms
+from em.em_classification import classify_efms
+from em.em_manager import serialize_efms, perform_efma
 
 LINE_END = ' .'
 
@@ -23,18 +23,21 @@ help_message = '''
 Converts a model in dat format into SBML and (optionally) performs EFM analysis on it.
 Specify the path to your model as the --dat parameter;
 
-If you want to perform the EFM calculation followed by the ACoM classification,
+If you want to perform the EFM calculation followed by the EFM classification,
 specify a reaction that should be present in EFMs as the --reaction parameter
 and specify the path to your TreeEFM installation as the --tree parameter.
 
-If you want to perform an ACoM classification of your EFMs obtained with Metatool,
+If you want to perform a classification of your EFMs obtained with Metatool,
 specify the path to your Metatool output file as the --efm parameter.
 If you are only interested in EFMs containing a particular reaction, specify its id as the --reaction parameter.
 
-You can (optionally) specify the minimal motif length for ACoM as the --motif parameter.
+You can specify the minimal pattern length for EFM classification as the --length parameter.
+You can specify the minimal EFM number per pattern for EFM classification as the --number parameter.
 
-Usage:  (Conversion to SBML + Calculation of EFMs + ACoM classification)            dat2sbml.py --dat model.dat --reaction AA2 --verbose --motif 3 --tree TreeEFMseq
-        (Conversion to SBML + ACoM classification of EFMs obtained with Metatool)   dat2sbml.py --dat model.dat --reaction AA2 --verbose --motif 3 --efm out-meta
+Usage:  (Conversion to SBML + Calculation of EFMs + EFM classification)
+            dat2sbml.py --dat model.dat --reaction AA2 --verbose --length 3 --tree TreeEFMseq
+        (Conversion to SBML + Classification of EFMs obtained with Metatool)
+            dat2sbml.py --dat model.dat --reaction AA2 --verbose --length 3 --number 5 --efm out-meta
 '''
 
 
@@ -192,11 +195,11 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
 
 def process_args(argv):
     try:
-        opts, args = getopt.getopt(argv[1:], "m:r:h:v:d:t:e",
-                                   ["help", "motif=", "reaction=", "verbose", "dat=", "tree=", "efm="])
+        opts, args = getopt.getopt(argv[1:], "l:n:r:h:v:d:t:e",
+                                   ["help", "length=", "number=", "reaction=", "verbose", "dat=", "tree=", "efm="])
     except getopt.error, msg:
         raise Usage(msg)
-    dat, r_id, verbose, motif_len, tree, efm = None, None, False, 2, None, None
+    dat, r_id, verbose, motif_len, tree, efm, efm_num = None, None, False, 2, None, None, 2
     # option processing
     for option, value in opts:
         if option in ("-h", "--help"):
@@ -207,8 +210,10 @@ def process_args(argv):
             r_id = value
         if option in ("-v", "--verbose"):
             verbose = True
-        if option in ("-m", "--motif"):
+        if option in ("-l", "--length"):
             motif_len = int(value)
+        if option in ("-n", "--number"):
+            efm_num = int(value)
         if option in ("-t", "--tree"):
             tree = value
         if option in ("-e", "--efm"):
@@ -217,14 +222,14 @@ def process_args(argv):
         raise Usage(help_message)
     model_dir = dirname(abspath(dat))
     sbml = '%s/%s.xml' % (model_dir, os.path.splitext(basename(dat))[0])
-    return dat, r_id, sbml, model_dir, verbose, motif_len, tree, efm
+    return dat, r_id, sbml, model_dir, verbose, motif_len, tree, efm, efm_num
 
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
     try:
-        dat, r_id, sbml, model_dir, verbose, motif_len, tree, efm_file = process_args(argv)
+        dat, r_id, sbml, model_dir, verbose, min_pattern_len, tree, efm_file, min_efm_num = process_args(argv)
     except Usage, err:
         print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
         print >> sys.stderr, "\t for help use --help"
@@ -234,7 +239,7 @@ def main(argv=None):
     r_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
     if tree:
         perform_efma(sbml=sbml, in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(({r_id: False}, 1.0), ),
-                     em_number=10000, min_motif_len=motif_len, model_dir=model_dir,
+                     em_number=10000, min_motif_len=min_pattern_len, model_dir=model_dir,
                      output_motif_file='%s/motifs.xlsx' % model_dir, output_efm_file='%s/efms.xlsx' % model_dir,
                      tree_efm_path=tree)
     if efm_file:
@@ -242,7 +247,9 @@ def main(argv=None):
         if r_id:
             efms = [efm for efm in efms if r_id in efm]
         serialize_efms(sbml, efms, path='%s/efms.xlsx' % model_dir)
-        classify_efms(efms, min_motif_length=motif_len, r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
+        # classify_efms(efms, min_motif_length=min_pattern_len, r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
+        classify_efms(efms, r_ids, min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
+                      output_file='%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num))
 
 
 if __name__ == "__main__":
