@@ -190,7 +190,7 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
                                  extract_m_id_stoichiometry_pairs(ps))
     libsbml.SBMLWriter().writeSBMLToFile(document, out_sbml)
     logging.info("...%s converted to %s" % (in_dat, out_sbml))
-    return r_rev_ids + r_irrev_ids
+    return r_rev_ids, r_irrev_ids
 
 
 def process_args(argv):
@@ -235,20 +235,25 @@ def main(argv=None):
         print >> sys.stderr, "\t for help use --help"
         return 2
     if verbose:
-        logging.basicConfig(level=logging.INFO, format='%(message)s')
-    r_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s')
+    r_rev_ids, r_irrev_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
     if tree:
         perform_efma(sbml=sbml, in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(({r_id: False}, 1.0), ),
-                     em_number=10000, min_motif_len=min_pattern_len, model_dir=model_dir,
+                     em_number=10000, min_pattern_len=min_pattern_len, model_dir=model_dir,
                      output_motif_file='%s/motifs.xlsx' % model_dir, output_efm_file='%s/efms.xlsx' % model_dir,
-                     tree_efm_path=tree)
+                     tree_efm_path=tree, min_efm_num_per_pattern=min_efm_num)
     if efm_file:
+        r_ids = r_rev_ids + r_irrev_ids
         efms = convert_metatool_output2efm(efm_file, r_ids)
         if r_id:
             efms = [efm for efm in efms if r_id in efm]
         serialize_efms(sbml, efms, path='%s/efms.xlsx' % model_dir)
         # classify_efms(efms, min_motif_length=min_pattern_len, r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
-        classify_efms(efms, r_ids, min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
+        # classify_efms(efms, r_ids, reversible_r_ids=set(r_rev_ids),
+        #               min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
+        #               output_file='%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num))
+        classify_efms(efms, r_ids,
+                      min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
                       output_file='%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num))
 
 
