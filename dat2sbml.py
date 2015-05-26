@@ -172,10 +172,10 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
             if not mode:
                 continue
             if R_REV == mode:
-                r_rev_ids = line.split(ENTITY_IDENTIFIER_DELIMITER)
+                r_rev_ids = [r_id for r_id in line.split(ENTITY_IDENTIFIER_DELIMITER) if r_id.strip()]
                 r_ids_rev = set(r_rev_ids)
             elif R_IRREV == mode:
-                r_irrev_ids = line.split(ENTITY_IDENTIFIER_DELIMITER)
+                r_irrev_ids = [r_id for r_id in line.split(ENTITY_IDENTIFIER_DELIMITER) if r_id.strip()]
             elif M_INT == mode:
                 for m_id in set(line.split(ENTITY_IDENTIFIER_DELIMITER)):
                     convert_metabolite(m_id, c.getId(), model)
