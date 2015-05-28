@@ -13,27 +13,25 @@ def stoichiometric_matrix(model, path):
     i.e. one cell per line as follows: row,column,value.
     :param model: libsbml model
     :param path: path to file where to save the matrix
-    :return s_id2i, r_id2i: a tuple of dictionaries: species id to its index,
-    reactions id to its indices: (i, i+1) for reversible reactions, (i, 0) for irreversible ones.
+    :return s_id2i, r_id2i, rev_r_id2i: a tuple of three dictionaries: species id to its index,
+    reactions id to its indices; reversible reaction id to its index (for the opposite direction).
     """
     internal_s_ids = [s.id for s in model.getListOfSpecies() if not s.getBoundaryCondition()]
     s_id2i = dict(zip(internal_s_ids, xrange(1, len(internal_s_ids) + 1)))
-    r_id2i = {}
+    r_id2i, rev_r_id2i = {}, {}
     i = 1
     with open(path, 'w+') as f:
-        for r in model.getListOfReactions():
-            l, u = 0, 0
+        for r in sorted(model.getListOfReactions(), key=lambda r: r.id):
             l_b, u_b = get_bounds(r)
             if u_b > 0:
-                l = i
+                add_reaction_data(f, i, r, s_id2i)
+                r_id2i[r.id] = i
                 i += 1
-                add_reaction_data(f, l, r, s_id2i)
             if l_b < 0:
-                u = i
+                add_reaction_data(f, i, r, s_id2i, reversed=True)
+                rev_r_id2i[r.id] = i
                 i += 1
-                add_reaction_data(f, u, r, s_id2i, reversed=True)
-            r_id2i[r.id] = (l, u)
-    return s_id2i, r_id2i
+    return s_id2i, r_id2i, rev_r_id2i
 
 
 def add_reaction_data(file, reaction_number, reaction, m_id2i, reversed=False):

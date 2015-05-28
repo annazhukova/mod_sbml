@@ -6,8 +6,13 @@ import sys
 
 import libsbml
 import re
-from em.em_classification import classify_efms
-from em.em_manager import serialize_efms, perform_efma
+import math
+from em.acom_classification import acom_classification
+from em.efm_analyser import perform_efma
+from em.em_classification_binary import classify_efms
+from em.em_manager import efm2binary
+from em.em_serialization_manager import serialize_efms_xslx, serialize_patterns, get_pattern_sorter, \
+    SORT_BY_WEIGHTED_PRODUCT_OF_EFM_NUMBER_AND_PATTERN_LENGTH, serialize_efms_txt
 
 LINE_END = ' .'
 
@@ -109,7 +114,7 @@ def convert_reaction(model, r_id, rev, r_m_id2st, p_m_id2st):
         add_metabolites_to_reaction(r, p_m_id2st, is_reactant=False)
 
 
-def convert_metatool_output2efm(metatool_file, sorted_r_ids):
+def convert_metatool_output2efm(metatool_file, sorted_r_ids, reversible_r_ids, r_id):
     """
     Extracts the EFM information from a given output file of Metatool
     and converts them to an inner format: list of EFMs represented as dictionaries of r_id: coefficient,
@@ -117,9 +122,11 @@ def convert_metatool_output2efm(metatool_file, sorted_r_ids):
     :param metatool_file: output file produced by Metatool
     :param sorted_r_ids: list of reaction ids, in the same order as in the input .dat file given to Metatool,
     reversible reactions followed by irreversible.
-    :return: list of EFMs represented as dictionaries of r_id: coefficient,
-    i.e. [{r_id: coefficient, ...}, ...]
+    :param reversible_r_ids: set of reversible reaction ids.
+    :param (optional) str representing r_id that needs to be present in all resulting EFMs
+    :return: list of EFMs represented as (binary_efm, coeffs)
     """
+    int_size = math.log(sys.maxint) / math.log(2)
     efms = []
     with open(metatool_file, 'r') as f:
         line = next(f)
@@ -134,7 +141,8 @@ def convert_metatool_output2efm(metatool_file, sorted_r_ids):
             if line:
                 coefficients = re.findall(r"[-+]?\d*\.*\d+", line)
                 efm = {r_id: float(c) for (r_id, c) in zip(sorted_r_ids, coefficients) if float(c) != 0}
-                efms.append(efm)
+                if not r_id or r_id in efm:
+                    efms.append(efm2binary(efm, sorted_r_ids, reversible_r_ids, int_size))
             line = next(f)
     return efms
 
@@ -240,21 +248,23 @@ def main(argv=None):
     if tree:
         perform_efma(sbml=sbml, in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(({r_id: False}, 1.0), ),
                      em_number=10000, min_pattern_len=min_pattern_len, model_dir=model_dir,
-                     output_motif_file='%s/motifs.xlsx' % model_dir, output_efm_file='%s/efms.xlsx' % model_dir,
+                     output_pattern_file='%s/motifs.xlsx' % model_dir, output_efm_file='%s/efms.xlsx' % model_dir,
                      tree_efm_path=tree, min_efm_num_per_pattern=min_efm_num)
     if efm_file:
         r_ids = r_rev_ids + r_irrev_ids
-        efms = convert_metatool_output2efm(efm_file, r_ids)
-        if r_id:
-            efms = [efm for efm in efms if r_id in efm]
-        serialize_efms(sbml, efms, path='%s/efms.xlsx' % model_dir)
-        # classify_efms(efms, min_motif_length=min_pattern_len, r_ids=r_ids, output_file='%s/motifs.xlsx' % model_dir, sbml=sbml)
-        # classify_efms(efms, r_ids, reversible_r_ids=set(r_rev_ids),
-        #               min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
-        #               output_file='%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num))
-        classify_efms(efms, r_ids,
-                      min_pattern_len=min_pattern_len, min_efm_num=min_efm_num,
-                      output_file='%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num))
+        efms = convert_metatool_output2efm(efm_file, r_ids, r_rev_ids, r_id)
+        serialize_efms_txt(sbml, efms, r_ids, r_rev_ids, path='%s/efms.txt' % model_dir)
+        # acom_classification(efms, r_ids, set(r_rev_ids), model_dir,
+        #                     similarity_threshold=min_pattern_len + min_pattern_len / 3,
+        #                     min_pattern_size=min_pattern_len, acom_path='/home/anna/Applications/acom-c/acom-c')
+        min_efm_num = len(efms) / 5
+        min_pattern_len = (sum((len(efm[1]) for efm in efms)) / len(efms)) / 2
+        p_id2efm_ids, id2pattern = classify_efms(efms, min_pattern_len=min_pattern_len, min_efm_num=min_efm_num)
+        sorter = get_pattern_sorter(id2pattern, p_id2efm_ids, min_pattern_len, min_efm_num,
+                                    sort=SORT_BY_WEIGHTED_PRODUCT_OF_EFM_NUMBER_AND_PATTERN_LENGTH)
+        serialize_patterns(p_id2efm_ids, id2pattern, r_ids, set(r_rev_ids),
+                           '%s/patterns_min_len_%d_min_efm_num_%d.txt' % (model_dir, min_pattern_len, min_efm_num),
+                           sorter=sorter)
 
 
 if __name__ == "__main__":

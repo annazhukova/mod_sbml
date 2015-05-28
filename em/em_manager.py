@@ -1,26 +1,172 @@
 import logging
 import os
+import math
+import sys
+import gmpy
 
 import libsbml
-import openpyxl
-from em.em_classification_binary import classify_efms
 
+from em.acom import classify
 from em.stoichiometry_manager import stoichiometric_matrix, ems2binary
-from sbml.sbml_manager import get_kegg_r_id, get_gene_association, get_r_comps, submodel
-from serialization.serialization_manager import get_sbml_r_formula
-from serialization.xlsx_helper import save_data, BASIC_STYLE
 
-basic_r_style = lambda r_id: BASIC_STYLE
+PRECISION = 6
 
 __author__ = 'anna'
 
 
-ZERO_THRESHOLD = 1e-9
+def binary2efm(binary_efm, r_ids, reversible_r_ids, int_size=None, coefficients=None, binary=False):
+    """
+    Converts an EFM from a binary representation into a dictionary
+    that maps ids of active reactions to their coefficients: {r_id: coefficient}.
+    If binary is set to True, the coefficient values are 1 (for any active reaction in the standard direction)
+    or -1 (for reactions that are active in the reversed direction).
+
+    :param binary_efm: an EFM in a binary representation.
+    A binary representation of an EFM is a list of integers whose binary representations
+    correspond to the reactions that are active in the EFM: if the reaction is active,
+    the corresponding bit is set to 1.
+    If the total number of reactions in the model is larger that the number of bits in an int, several ints are used.
+
+    Example: For a model containing reactions r1, r2(reversible), r3(reversible), r4, r5,
+    a EFM: 3 r1, -2 r2, 1 r3, 1 r5 would be represented as [77], as the binary representation of 77 is '1001101'
+    that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
 
 
-def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_2threshold=None, output_file=None,
-                 over_expressed_r_ids=set(), under_expressed_r_ids=set(), threshold=0.0, r_ids=None,
-                 r_id2style=basic_r_style):
+    :param r_ids: ordered collection of reaction ids (strings).
+
+    :param reversible_r_ids: set of ids of reversible reactions (strings).
+
+    :param int_size: the maximal number of bits in an int, can be calculated as math.log(sys.maxint) / math.log(2).
+
+    :param coefficients: (optional) a list of non-zero coefficients corresponding to the binary EFM.
+    If not present, the coefficients are assumed to take values 1 or -1.
+    Example: The non_zero_coefficients for the EFM in the example above are [3, -2, 1, 1].
+
+    :param binary: boolean, if is set to True, the coefficient values in the result will be
+    1 (for any active reaction in the standard direction)
+    or -1 (for reactions that are active in the reversed direction).
+    Otherwise, any float coefficient values will be possible.
+
+    :return:
+    """
+    if not int_size:
+        int_size = get_int_size()
+    converted_efm = {}
+    binary_efm_iterable = iter(binary_efm)
+    cur_efm_part = next(binary_efm_iterable)
+    coeff_iterable = iter(coefficients) if coefficients else None
+
+    def process(r_id, cur_efm_part, i, reversed=False):
+        if cur_efm_part & i:
+            coeff = next(coeff_iterable) if coefficients else (-1 if reversed else 1)
+            if binary:
+                converted_efm[r_id] = 1 if coeff > 0 else -1
+            else:
+                converted_efm[r_id] = coeff
+        if math.log(i) == int_size:
+            cur_efm_part = next(binary_efm_iterable)
+            i = 1
+        else:
+            i <<= 1
+        return i, cur_efm_part
+
+    i = 1
+    for r_id in r_ids:
+        i, cur_efm_part = process(r_id, cur_efm_part, i)
+        if r_id in reversible_r_ids:
+            i, cur_efm_part = process(r_id, cur_efm_part, i, True)
+    return converted_efm
+
+
+def efm2binary(efm, r_ids, reversible_r_ids, int_size=None):
+    """
+    Converts an EFM representation {r_id: coefficient} into a tuple (binary_representation, non_zero_coefficients).
+
+    A binary representation of an EFM is a list of integers whose binary representations
+    correspond to the reactions that are active in the EFM: if the reaction is active,
+    the corresponding bit is set to 1.
+    If the total number of reactions in the model is larger that the number of bits in an int, several ints are used.
+
+    Example: For a model containing reactions r1, r2(reversible), r3(reversible), r4, r5,
+    a EFM: 3 r1, -2 r2, 1 r3, 1 r5 would be represented as [77], as the binary representation of 77 is '1001101'
+    that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
+    The non_zero_coefficients for this EFM are [3, -2, 1, 1].
+
+    :param efm: a EFM represented as a dictionary {r_id: coefficient}.
+
+    :param r_ids: ordered collection of reaction ids (strings).
+
+    :param reversible_r_ids: set of ids of reversible reactions (strings).
+
+    :param int_size: the maximal number of bits in an int, can be calculated as math.log(sys.maxint) / math.log(2).
+
+    :return: a EFM represented as a tuple: binary_representation, non_zero_coefficients.
+    """
+    if not int_size:
+        int_size = get_int_size()
+    bit_efm = []
+    bit_efm_cur = 0
+    i = 1
+    coefficients = []
+
+    def advance(i, bit_efm_cur):
+        if math.log(i) == int_size:
+            bit_efm.append(bit_efm_cur)
+            bit_efm_cur = 0
+            i = 1
+        else:
+            i <<= 1
+        return bit_efm_cur, i
+
+    for r_id in r_ids:
+        if r_id in efm:
+            coeff = efm[r_id]
+        else:
+            coeff = 0
+        if coeff > 0:
+            bit_efm_cur |= i
+            coefficients.append(coeff)
+        bit_efm_cur, i = advance(i, bit_efm_cur)
+        if r_id in reversible_r_ids:
+            if coeff < 0:
+                bit_efm_cur |= i
+                coefficients.append(coeff)
+            bit_efm_cur, i = advance(i, bit_efm_cur)
+    bit_efm.append(bit_efm_cur)
+    return tuple(bit_efm), coefficients
+
+
+def get_int_size():
+    """
+    Calculates the maximal number of bits in an int:
+    math.log(sys.maxint) / math.log(2).
+
+    :return: int, the maximal number of bits in an int.
+    """
+    return math.log(sys.maxint) / math.log(2)
+
+
+def get_binary_efm_length(binary_efm):
+    """
+    Returns the length of a EFM represented in a binary form (number of active reactions).
+
+    A binary representation of an EFM is a list of integers whose binary representations
+    correspond to the reactions that are active in the EFM: if the reaction is active,
+    the corresponding bit is set to 1.
+    If the total number of reactions in the model is larger that the number of bits in an int, several ints are used.
+
+    Example: For a model containing reactions r1, r2(reversible), r3(reversible), r4, r5,
+    a EFM: 3 r1, -2 r2, 1 r3, 1 r5 would be represented as [77], as the binary representation of 77 is '1001101'
+    that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
+
+    :param binary_efm: list of integers -- an EFM represented in a binary form.
+    :return: int, number of active reactions in the EFM.
+    """
+    return sum(gmpy.popcount(it) for it in binary_efm)
+
+
+def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_2threshold=None, threshold=0.0,
+                 r_ids=None):
     """
     Computes elementary flux modes (EFMs) in a given SBML (see http://sbml.org) model,
     that contain a reaction of interest
@@ -36,11 +182,20 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     if specified, only EFMs that contain all (if reaction_op == (REACTION_OPERATION_AND))
     or any (if reaction_op == (REACTION_OPERATION_OR) of the reaction ids in specified directions
     from this set will be returned.
-    :param output_file: string, if specified, the EFMs will be saved to this xlsx file:
-    each EFM in a separate sheet called EFM_<EFM_number>_<number_of_participating_reactions>,
-    the sheet contains the information about the reactions in the EFM.
-    :return:efms: dictionary r_id: coefficient (only contains values with non-zero coefficients);
+    :return:efms: list of EFMs in binary representation: (binary_efm, non_zero_coefficients);
             r_ids: concerned reaction ids;
+
+
+    A binary representation of an EFM is a list of integers whose binary representations
+    correspond to the reactions that are active in the EFM: if the reaction is active,
+    the corresponding bit is set to 1.
+    If the total number of reactions in the model is larger that the number of bits in an int, several ints are used.
+
+    Example: For a model containing reactions r1, r2(reversible), r3(reversible), r4, r5,
+    a EFM: 3 r1, -2 r2, 1 r3, 1 r5 would be represented as [77], as the binary representation of 77 is '1001101'
+    that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
+    The non_zero_coefficients for this EFM are [3, -2, 1, 1].
+
     :raise ValueError: if the reaction of interest was not found in the model.
     """
     if not os.path.exists(tree_efm_path):
@@ -49,12 +204,12 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     model = doc.getModel()
     # Compute stoichiometric matrix
     st_matrix_file = "%s/st_matrix.txt" % directory
-    s_id2i, r_id2i = stoichiometric_matrix(model, st_matrix_file)
+    s_id2i, r_id2i, rev_r_id2i = stoichiometric_matrix(model, st_matrix_file)
     logging.info("stoichiometric matrix saved to %s" % st_matrix_file)
     # Figure out in which reaction we are interested in
-    if r_id not in r_id2i:
-        raise ValueError("Reaction with id %s is not found in the model" % r_id)
-    i = r_id2i[r_id][1] if rev else r_id2i[r_id][0]
+    if (rev and r_id not in rev_r_id2i) or (not rev and r_id not in r_id2i):
+        raise ValueError("R%seaction with id %s is not found in the model" % ('eversed r' if rev else '', r_id))
+    i = rev_r_id2i[r_id] if rev else r_id2i[r_id]
     # Compute EFMs using TreeEFM software (Pey et al. 2014, PMID: 25380956)
     em_file = "%s/FV-EM.dat" % directory
     os.system("%s -r %d -i %s -l EM -e %d -o %s" % (tree_efm_path, i, st_matrix_file, em_number, directory))
@@ -64,70 +219,76 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     # Filter EFMs so that only those that don't include the reaction in opposite directions are left.
     # If r_id2rev are specified, filter EFMs to leave only those that include these reactions in these directions.
     em_file_filtered = "%s/FV-EM_filtered.dat.txt" % directory
-    efms = filter_ems(em_file, r_id2i, em_file_filtered, r_id2rev_2threshold, threshold=threshold, r_ids=r_ids)
-    logging.info("%d elementary modes corresponding to reactions of interest saved to %s" % (len(efms), em_file_filtered))
-    # em_file = em_file_filtered
-    # efms = sorted(format_ems(em_file, r_id2i, threshold, r_ids_to_keep=r_id_of_interest), key=len)
-    efms = sorted(efms, key=len)
-    # Save the result to file
-    if output_file:
-        serialize_efms(sbml, efms, output_file, over_expressed_r_ids=over_expressed_r_ids,
-                       under_expressed_r_ids=under_expressed_r_ids, r_id2style=r_id2style)
-
-    return efms, r_ids if r_ids else r_id2i.keys()
+    efms = filter_efms(em_file, r_id2i, rev_r_id2i, em_file_filtered, r_id2rev_2threshold, zero_threshold=threshold,
+                      r_ids=r_ids)
+    logging.info(
+        "%d elementary modes corresponding to reactions of interest saved to %s" % (len(efms), em_file_filtered))
+    efms = sorted(efms, key=lambda (binary_efm, coeffs): len(coeffs))
+    return efms, r_ids if r_ids else sorted(set(r_id2i.iterkeys()) | set(rev_r_id2i.iterkeys()))
 
 
-def filter_ems(in_path, r_id2i, out_path, r_id2rev_2threshold, threshold=0.0, r_ids=None):
-    i2r_id = {}
-    for r_id, (i, j) in r_id2i.iteritems():
-        if i:
-            i2r_id[i] = (r_id, False)
-        if j:
-            i2r_id[j] = (r_id, True)
-    num = 0
+def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero_threshold=0.0, r_ids=None):
+    i2r_id = {i: (r_id, False) for (r_id, i) in r_id2i.iteritems()}
+    i2r_id.update({i: (r_id, True) for (r_id, i) in rev_r_id2i.iteritems()})
+    all_r_ids = r_ids if r_ids else sorted(set(r_id2i.iterkeys()) | set(rev_r_id2i.iterkeys()))
+    rev_r_ids = set(rev_r_id2i.iterkeys())
+    int_size = math.log(sys.maxint) / math.log(2)
     processed = set()
-    ems = []
+    efms = []
+    round_value = lambda v: round(float(v), PRECISION)
     with open(out_path, 'w+') as out_f:
         with open(in_path, 'r') as in_f:
             for line in in_f:
                 values = line.replace("\n", "").strip().split(" ")
-                em = {i2r_id[i] for (v, i) in zip(values, xrange(1, len(values) + 1)) if round(float(v), 6)}
+                efm = {}
                 bad_em = False
-                for (r_id, rev) in em:
-                    if (r_id, not rev) in em:
+                for (v, i) in zip(values, xrange(1, len(values) + 1)):
+                    v = round_value(v)
+                    if not v or abs(v) <= zero_threshold:
+                        continue
+                    r_id, rev = i2r_id[i]
+                    if rev:
+                        v *= -1
+                    # The same reaction participates in different directions
+                    # => don't want such an EFM
+                    if r_id in efm:
                         bad_em = True
                         break
+                    efm[r_id] = v
+
+                # The same reaction participates in different directions
+                # => don't want such an EFM
                 if bad_em:
                     continue
+
+                # Check if all the reactions that are required are there
+                bad_em = False
                 if r_id2rev_2threshold:
                     for (r_id2rev, present_reaction_threshold) in r_id2rev_2threshold:
                         present_r_ids = set()
-                        em_r_ids = {it[0] for it in em}
                         for (r_id, rev) in r_id2rev.iteritems():
-                            if (r_id, rev) in em or (rev is None and r_id in em_r_ids):
+                            if r_id in efm and (rev is None or rev == (efm[r_id] < 0)):
                                 present_r_ids.add(r_id)
                         if len(present_r_ids) * 1.0 / len(r_id2rev) < present_reaction_threshold:
                             bad_em = True
                             break
                     if bad_em:
                         continue
+
                 out_f.write(line)
-                em = {i2r_id[i][0]: (-round(float(v), 6) if i2r_id[i][1] else round(float(v), 6))
-                      for (v, i) in zip(values, xrange(1, len(values) + 1))
-                      if abs(round(float(v), 6)) > threshold}
+
                 if r_ids:
-                    em = {r_id: val for (r_id, val) in em.items() if r_id in r_ids}
-                    em_support = tuple(sorted((r_id, val > 0) for (r_id, val) in em.iteritems()))
+                    efm = {r_id: val for (r_id, val) in efm.iteritems() if r_id in r_ids}
+                    # em_support = tuple(sorted((r_id, val > 0) for (r_id, val) in em.iteritems()))
+                em_support, coefficients = efm2binary(efm, all_r_ids, rev_r_ids, int_size)
                 if not r_ids or em_support not in processed:
-                    ems.append(em)
+                    efms.append((em_support, coefficients))
                     if r_ids:
                         processed.add(em_support)
-                    num += 1
-    return ems
+    return efms
 
 
-def classify_efms_with_acom(efms, min_motif_length, r_ids, neighbour_threshold=None, output_file=None, sbml=None,
-                  r_id2style=basic_r_style):
+def classify_efms_with_acom(efms, min_motif_length, r_ids, neighbour_threshold=None):
     """
     Classifies EFMs to find common motifs
     (using ACoM method [Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001]).
@@ -138,11 +299,6 @@ def classify_efms_with_acom(efms, min_motif_length, r_ids, neighbour_threshold=N
     :param neighbour_threshold: int, at least how many common elements two EFMs should have
     to be considered as neighbours in ACoM classification (see Peres et al. 2011).
     If not specified, then is set to the mean of all the values of the resemblance matrix.
-    :param output_file: string, if specified, the classes of EFMs will be saved to this xlsx file:
-    each motif in a separate sheet called Motif_<motif_number>_<motif_length>_<number_of_EFMs_that_contain_this_motif>,
-    the sheet contains the information about the reactions in the motif.
-    :param sbml: string, path to the SBML file with the model
-    (needed for saving EFMs to output file, otherwise can be None).
     :return: list of clusters: [(motif, list of binary EFMs that contain this motif)]
     and a list of outliers: binary EFMs that were not clustered.
     """
@@ -162,154 +318,4 @@ def classify_efms_with_acom(efms, min_motif_length, r_ids, neighbour_threshold=N
     logging.info("---------OUTLIERS (%d)-------" % len(outliers))
     logging.info(sorted(outliers))
 
-    # Save the result to file
-    if output_file and sbml:
-        doc = libsbml.SBMLReader().readSBML(sbml)
-        model = doc.getModel()
-        wb = openpyxl.Workbook()
-        i = 0
-        for motif in clusters.iterkeys():
-            data, styles = [], []
-            for (direction, r_id) in motif:
-                r = model.getReaction(r_id)
-                if not r:
-                    raise ValueError('Reaction with id %s was not found in the model %s' % (r_id, model.getId()))
-                data.append([r.id, r.name, get_sbml_r_formula(model, r, False), direction])
-                styles.append(r_id2style(r.id))
-            save_data(["Id", "Name", "Formula", "Direction"],
-                      data, wb, "Motif_%d_%d_%d.xlsx" % (i, len(motif), len(clusters[motif])), i,
-                      styles=styles)
-            i += 1
-        wb.save(output_file)
-
     return clusters, outliers
-
-
-def analyse_ems(sbml, directory, tree_efm_path, r_id, min_pattern_length, rev=False,
-                em_number=100, output_efm_file=None, output_pattern_file=None, r_id2rev_2threshold=None,
-                over_expressed_r_ids=set(), under_expressed_r_ids=set(), threshold=0.0, r_ids=None,
-                r_id2style=basic_r_style, min_efm_num_per_pattern=2):
-    """
-    Analyses elementary flux modes (EFMs) in a given SBML (see http://sbml.org) model:
-    1. computes the EFMs that contain a reaction of interest
-    (using TreeEFM software [Pey et al. 2014, PMID: 25380956]);
-    2. classifies them to find patterns common to at least min_efm_num_per_pattern EFMs
-    and of length at least min_pattern_length.
-
-    :param sbml: string, path to the SBML file with the model.
-    :param directory: string, directory where to store the results, such as stoichiometric matrix, EFMs.
-    :param tree_efm_path: string,path to the executable of TreeEFM software [Pey et al. 2014, PMID: 25380956].
-    :param r_id:string, id of the reaction of interest.
-    :param min_pattern_length: int, minimal pattern length to be considered for classification
-    :param rev: boolean, if the reaction of interest should be considered in the opposite direction.
-    :param em_number: int, number of EFMs to compute with TreeEFM software [Pey et al. 2014, PMID: 25380956].
-    :param output_efm_file: (optional) string, if specified, the EFMs will be saved to this xlsx file:
-    each EFM in a separate sheet called EFM_<EFM_number>_<number_of_participating_reactions>,
-    the sheet contains the information about the reactions in the EFM.
-    :param output_pattern_file: (optional) path to the file where to serialize found patterns.
-    The serialization places one pattern per line. Patterns are represented as ids of the active reactions
-    (for the reversed reactions, the id is preceded by minus), e.g. -R1 R3 -R7 R11 R25.
-    Patterns are sorted according to the sort function.
-    :param r_id2rev_2threshold: set of strings in the form {(r_id_0, reversed_0), (r_id_1, reversed_1), ...},
-    if specified, only EFMs that contain all (if reaction_op == (REACTION_OPERATION_AND))
-    or any (if reaction_op == (REACTION_OPERATION_OR) of the reaction ids in specified directions
-    from this set will be returned.
-    :return: efms, p_id2efm_ids and id2pattern.
-    efms if a list of found EFMs. Each EFM is represented as a dictionary,
-    mapping the ids of active reactions to their coefficients in the EFM: {r_id: coeff};
-    p_id2efm_ids maps a pattern_id to ids of the EFMs containning this pattern;
-    id2pattern maps a pattern_id to the pattern. Patterns are represented as sets {sign(r_i)*i for r_i \in pattern},
-    that is a list of integers representing the reactions that are present in the pattern:
-    for each reaction r_i participating in the pattern,
-    the resulting representation will contain i if the reaction is active in its standard direction,
-    -i if the reaction is reversed.
-    :raise ValueError: if the reaction of interest was not found in the model.
-    """
-    efms, r_ids = compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_2threshold,
-                               output_efm_file, over_expressed_r_ids=over_expressed_r_ids,
-                               under_expressed_r_ids=under_expressed_r_ids, threshold=threshold, r_ids=r_ids,
-                               r_id2style=r_id2style)
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
-    reversible_r_ids = {r_id for r_id in r_ids if model.getReaction(r_id).getReversible()}
-    p_id2efm_ids, id2pattern = \
-        classify_efms(efms, r_ids, reversible_r_ids=reversible_r_ids,
-                      min_pattern_len=min_pattern_length, min_efm_num=min_efm_num_per_pattern,
-                      output_file=output_pattern_file)
-    # clusters, outliers = classify_efms(efms, min_motif_length, r_ids, neighbour_threshold, output_motif_file, sbml,
-    #                                    r_id2style=r_id2style)
-
-    return efms, p_id2efm_ids, id2pattern
-
-
-def serialize_efms(sbml, efms, path, r_id2style=basic_r_style,
-                   over_expressed_r_ids=set(), under_expressed_r_ids=set()):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
-    wb = openpyxl.Workbook()
-    i = 0
-    for r_id2coefficients in sorted(efms, key=lambda r_id2coeffs: (
-            -len(set(r_id2coeffs.iterkeys()) & over_expressed_r_ids),
-            len(set(r_id2coeffs.iterkeys()) & under_expressed_r_ids),
-            len(r_id2coeffs))):
-        data, styles = [], []
-        for r_id in sorted(r_id2coefficients.iterkeys(), key=lambda r_id: (sorted(get_r_comps(r_id, model)), r_id)):
-            r = model.getReaction(r_id)
-            if not r:
-                raise ValueError('Reaction with id %s was not found in the model %s' % (r_id, model.getId()))
-            comps = ", ".join(sorted((model.getCompartment(c_id).name for c_id in get_r_comps(r_id, model))))
-            data.append([r.id, r.name, get_sbml_r_formula(model, r, False), get_kegg_r_id(r), get_gene_association(r),
-                         r_id2coefficients[r_id], comps])
-            styles.append(r_id2style(r.id))
-        r_ids = set(r_id2coefficients.iterkeys())
-        save_data(["Id", "Name", "Formula", "Kegg", "Genes", "Coefficients", "Compartments"],
-                  data=data, ws_name="EM_%d_(%d)_%d_%d" % (i + 1, len(r_id2coefficients),
-                                                           len(r_ids & over_expressed_r_ids),
-                                                           len(r_ids & under_expressed_r_ids)),
-                  wb=wb, ws_index=i, styles=styles)
-        i += 1
-    wb.save(path)
-
-
-def perform_efma(sbml, in_r_id, in_r_reversed, out_r_id2rev_2threshold, em_number,
-                 min_pattern_len, model_dir, neighbour_threshold=None, output_motif_file=None, output_efm_file=None,
-                 motif_sbml_prefix=None, efm_sbml_prefix=None, over_expressed_r_ids=set(), under_expressed_r_ids=set(),
-                 threshold=ZERO_THRESHOLD, r_ids=None, r_id2style=basic_r_style,
-                 tree_efm_path="/home/anna/Applications/TreeEFM/tool/TreeEFMseq", min_efm_num_per_pattern=2):
-    efms, p_id2efm_ids, id2pattern = analyse_ems(sbml, model_dir, em_number=em_number,
-                                           r_id=in_r_id, rev=in_r_reversed,
-                                           tree_efm_path=tree_efm_path,
-                                           min_pattern_length=min_pattern_len, r_id2rev_2threshold=out_r_id2rev_2threshold,
-                                           output_pattern_file=output_motif_file, output_efm_file=output_efm_file,
-                                           over_expressed_r_ids=over_expressed_r_ids,
-                                           under_expressed_r_ids=under_expressed_r_ids,
-                                           threshold=threshold, r_ids=r_ids, r_id2style=r_id2style,
-                                           min_efm_num_per_pattern=min_efm_num_per_pattern)
-
-    if motif_sbml_prefix is not None:
-        for p_id, pattern in id2pattern.iteritems():
-            doc = libsbml.SBMLReader().readSBML(sbml)
-            model = doc.getModel()
-            submodel({r_id[1:] if '-' == r_id[0] else r_id for r_id in pattern}, model)
-            model.setId('%s_Pattern_%d' % (model.getId(), p_id))
-            model.setName('%s_Pattern_%d' % (model.getName(), p_id))
-            for signed_r_id in pattern:
-                r_id = signed_r_id[1:] if '-' == signed_r_id[0] else signed_r_id
-                r = model.getReaction(r_id)
-                r.setName(signed_r_id)
-            libsbml.SBMLWriter().writeSBMLToFile(doc, '%s_%d_%d_%d.xml'
-                                                 % (motif_sbml_prefix, p_id, len(p_id2efm_ids[p_id]), len(pattern)))
-
-    if efm_sbml_prefix is not None:
-        i = 1
-        for r_id2coeff in efms:
-            doc = libsbml.SBMLReader().readSBML(sbml)
-            model = doc.getModel()
-            submodel(set(r_id2coeff.iterkeys()), model)
-            model.setId('%s_EM_%d_%d' % (model.getId(), i, len(r_id2coeff)))
-            model.setName('%s_EM_%d_%d' % (model.getName(), i, len(r_id2coeff)))
-            for (r_id, coeff) in r_id2coeff.iteritems():
-                r = model.getReaction(r_id)
-                r.setName('%s %g' % (r.getName(), coeff))
-            libsbml.SBMLWriter().writeSBMLToFile(doc, '%s_%d_%d.xml' % (efm_sbml_prefix, i, len(r_id2coeff)))
-            i += 1
