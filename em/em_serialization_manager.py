@@ -6,7 +6,7 @@ import sys
 import libsbml
 import openpyxl
 
-from em.em_manager import binary2efm, get_binary_efm_length, get_int_size
+from em.efm_manager import binary2efm, get_binary_efm_length, get_int_size
 from sbml.sbml_manager import get_r_comps, submodel, get_kegg_r_id
 from serialization.serialization_manager import get_sbml_r_formula
 from serialization.xlsx_helper import BASIC_STYLE, save_data

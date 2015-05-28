@@ -9,8 +9,8 @@ import re
 import math
 from em.acom_classification import acom_classification
 from em.efm_analyser import perform_efma
-from em.em_classification_binary import classify_efms
-from em.em_manager import efm2binary
+from em.efm_classification import classify_efms
+from em.efm_manager import efm2binary
 from em.em_serialization_manager import serialize_efms_xslx, serialize_patterns, get_pattern_sorter, \
     SORT_BY_WEIGHTED_PRODUCT_OF_EFM_NUMBER_AND_PATTERN_LENGTH, serialize_efms_txt
 

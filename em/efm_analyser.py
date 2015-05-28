@@ -1,7 +1,7 @@
 import libsbml
 from em.acom_classification import acom_classification
-from em.em_classification_binary import classify_efms
-from em.em_manager import compute_efms, get_binary_efm_length
+from em.efm_classification import classify_efms
+from em.efm_manager import compute_efms, get_binary_efm_length
 from em.em_serialization_manager import basic_r_style, serialize_efms_xslx, serialize_efms_txt, efm2sbml, \
     get_pattern_sorter, serialize_patterns
 

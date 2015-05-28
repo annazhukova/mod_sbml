@@ -1,6 +1,6 @@
 from collections import defaultdict
 import logging
-from em.em_manager import get_binary_efm_length
+from em.efm_manager import get_binary_efm_length
 
 __author__ = 'anna'
 

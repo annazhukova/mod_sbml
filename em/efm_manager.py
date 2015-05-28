@@ -5,9 +5,8 @@ import sys
 import gmpy
 
 import libsbml
-
-from em.acom import classify
-from em.stoichiometry_manager import stoichiometric_matrix, ems2binary
+from gibbs.reaction_boundary_manager import get_bounds
+from sbml.sbml_manager import get_products, get_reactants
 
 PRECISION = 6
 
@@ -288,34 +287,37 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
     return efms
 
 
-def classify_efms_with_acom(efms, min_motif_length, r_ids, neighbour_threshold=None):
+def stoichiometric_matrix(model, path):
     """
-    Classifies EFMs to find common motifs
-    (using ACoM method [Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001]).
-
-    :param efms: dictionary {r_id: coefficient] of EFMs.
-    :param min_motif_length:int, minimal motif length to be considered for ACoM classification (see Peres et al. 2011)
-    :param r_ids: collection of reaction ids.
-    :param neighbour_threshold: int, at least how many common elements two EFMs should have
-    to be considered as neighbours in ACoM classification (see Peres et al. 2011).
-    If not specified, then is set to the mean of all the values of the resemblance matrix.
-    :return: list of clusters: [(motif, list of binary EFMs that contain this motif)]
-    and a list of outliers: binary EFMs that were not clustered.
+    Extracts the model's stoichiometric matrix in a format compatible with TreeEFM [Pey et al., 2014],
+    i.e. one cell per line as follows: row,column,value.
+    :param model: libsbml model
+    :param path: path to file where to save the matrix
+    :return m_id2i, r_id2i, rev_r_id2i: a tuple of three dictionaries: species id to its index,
+    reactions id to its indices; reversible reaction id to its index (for the opposite direction).
     """
-    r_ids = sorted(r_ids)
-    # Convert EFMs to binary EFMs
-    binary_ems = ems2binary(efms, r_ids)
-    logging.info(
-        "elementary modes converted to %d binary vectors" % len(binary_ems))
-    # Classify binary EFMs using ACoM method (Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001)
-    clusters, outliers = classify(binary_ems, min_motif_length, neighbour_threshold)
-    logging.info("---------CLUSTERS (%d)-------" % len(clusters))
-    clusters = {tuple(sorted((value, r_ids[index]) for (value, index) in motif)): elements for (motif, elements) in
-                clusters.iteritems()}
-    for motif, elements in clusters.iteritems():
-        logging.info(
-            "%d %d %s %s" % (len(motif), len(elements), motif, elements))
-    logging.info("---------OUTLIERS (%d)-------" % len(outliers))
-    logging.info(sorted(outliers))
+    internal_s_ids = [s.id for s in model.getListOfSpecies() if not s.getBoundaryCondition()]
+    m_id2i = dict(zip(internal_s_ids, xrange(1, len(internal_s_ids) + 1)))
+    r_id2i, rev_r_id2i = {}, {}
 
-    return clusters, outliers
+    def add_reaction_data(file, reaction_number, reaction, rev=False):
+        for (m_id, st) in get_reactants(reaction, True):
+            if m_id in m_id2i:
+                file.write("%d,%d,%d\n" % (m_id2i[m_id], reaction_number, st if rev else -st))
+        for (m_id, st) in get_products(reaction, True):
+            if m_id in m_id2i:
+                file.write("%d,%d,%d\n" % (m_id2i[m_id], reaction_number, -st if rev else st))
+
+    i = 1
+    with open(path, 'w+') as f:
+        for r in sorted(model.getListOfReactions(), key=lambda r: r.id):
+            l_b, u_b = get_bounds(r)
+            if u_b > 0:
+                add_reaction_data(f, i, r)
+                r_id2i[r.id] = i
+                i += 1
+            if l_b < 0:
+                add_reaction_data(f, i, r, rev=True)
+                rev_r_id2i[r.id] = i
+                i += 1
+    return m_id2i, r_id2i, rev_r_id2i

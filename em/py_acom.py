@@ -1,8 +1,8 @@
 from collections import defaultdict
 import logging
 from itertools import islice
-import datetime
 
+from em.efm_manager import binary2efm, get_int_size
 __author__ = 'anna'
 
 
@@ -147,4 +147,51 @@ def classify(ems, min_motif_length, neighbour_threshold=None):
     return clusters, outliers
 
 
+def classify_efms_with_acom(efms, r_ids, rev_r_ids, min_motif_length, neighbour_threshold=None):
+    """
+    Classifies EFMs to find common motifs
+    (using ACoM method [Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001]).
+
+    :param efms: a list of EFMs in binary form.
+
+    A binary representation of an EFM is a list of integers whose binary representations
+    correspond to the reactions that are active in the EFM: if the reaction is active,
+    the corresponding bit is set to 1.
+    If the total number of reactions in the model is larger that the number of bits in an int, several ints are used.
+
+    Example: For a model containing reactions r1, r2(reversible), r3(reversible), r4, r5,
+    a EFM: 3 r1, -2 r2, 1 r3, 1 r5 would be represented as [77], as the binary representation of 77 is '1001101'
+    that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
+
+    :param r_ids: ordered collection of reaction ids (strings).
+
+    :param rev_r_ids: set of ids of reversible reactions (strings).
+
+    :param min_motif_length:int, minimal motif length to be considered for ACoM classification (see Peres et al. 2011)
+
+    :param neighbour_threshold: int, at least how many common elements two EFMs should have
+    to be considered as neighbours in ACoM classification (see Peres et al. 2011).
+    If not specified, then is set to the mean of all the values of the resemblance matrix.
+
+    :return: list of clusters: [(motif, list of binary EFMs that contain this motif)]
+    and a list of outliers: binary EFMs that were not clustered.
+    """
+    r_ids = sorted(r_ids)
+    int_size = get_int_size()
+    # Convert EFMs to binary EFMs
+    binary_ems = [binary2efm(binary_efm, r_ids, rev_r_ids, int_size, coeffs, False) for (binary_efm, coeffs) in efms]
+    logging.info(
+        "elementary modes converted to %d binary vectors" % len(binary_ems))
+    # Classify binary EFMs using ACoM method (Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001)
+    clusters, outliers = classify(binary_ems, min_motif_length, neighbour_threshold)
+    logging.info("---------CLUSTERS (%d)-------" % len(clusters))
+    clusters = {tuple(sorted((value, r_ids[index]) for (value, index) in motif)): elements for (motif, elements) in
+                clusters.iteritems()}
+    for motif, elements in clusters.iteritems():
+        logging.info(
+            "%d %d %s %s" % (len(motif), len(elements), motif, elements))
+    logging.info("---------OUTLIERS (%d)-------" % len(outliers))
+    logging.info(sorted(outliers))
+
+    return clusters, outliers
 
