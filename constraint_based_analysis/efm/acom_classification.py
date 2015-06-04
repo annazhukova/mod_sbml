@@ -2,10 +2,9 @@ from dircache import listdir
 import logging
 import os
 import re
-import shutil
 
-from em.efm_manager import binary2efm, get_int_size
-from utils import misc
+from constraint_based_analysis.efm import efm_manager
+from constraint_based_analysis.efm.efm_manager import binary2efm, get_int_size
 
 __author__ = 'anna'
 
@@ -64,7 +63,7 @@ def acom_classification(efm_id2efms, r_ids, rev_r_ids, directory, similarity_thr
 
 
 def process_clusters(dest_path, efm_id2efm, r_ids, reversible_r_ids, similarity_threshold, min_pattern_size):
-    classes_dir = "%s/../" % os.path.dirname(os.path.abspath(misc.__file__))
+    classes_dir = os.path.dirname(os.path.abspath(efm_manager.__file__))
     for f in sorted(listdir(classes_dir)):
         if re.search('^class\d+.txt$', f):
             os.rename(os.path.join(classes_dir, f), os.path.join(dest_path, f))

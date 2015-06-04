@@ -3,10 +3,10 @@ import logging
 import os
 from os.path import dirname, abspath, basename
 import sys
+from constraint_based_analysis.efm.efm_analyser import perform_efma
+from constraint_based_analysis.efm.efm_manager import efm2binary, get_int_size
 
-from em.metatool_manager import convert_metatool_output2efm, convert_dat2sbml
-from em.efm_analyser import perform_efma
-from em.efm_manager import efm2binary, get_int_size
+from constraint_based_analysis.efm.metatool_manager import convert_metatool_output2efm, convert_dat2sbml
 
 help_message = '''
 Converts a model in dat format into SBML and (optionally) performs EFM analysis on it.

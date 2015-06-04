@@ -30,5 +30,5 @@ setup(name='mod_sbml',
           'Topic :: Systems Biology',
           'Topic :: Software Development',
       ],
-      install_requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib', 'gmpy']
+      install_requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib', 'gmpy', 'cobra']
 )

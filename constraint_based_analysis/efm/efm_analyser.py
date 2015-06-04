@@ -2,13 +2,13 @@ import logging
 import os
 
 import libsbml
+from constraint_based_analysis.efm.acom_classification import acom_classification
+from constraint_based_analysis.efm.efm_classification import classify_efms
+from constraint_based_analysis.efm.efm_manager import compute_efms, get_binary_efm_length
+from constraint_based_analysis.efm.efm_serialization_manager import efm2sbml, serialize_efms_txt, serialize_efms_xslx, \
+    serialize_important_reactions, r_ids2sbml, get_pattern_sorter, serialize_patterns
+from constraint_based_analysis.efm.reaction_classification_by_efm import classify_reactions_by_efm
 
-from em.acom_classification import acom_classification
-from em.efm_classification import classify_efms
-from em.reaction_classification_by_efm import classify_reactions_by_efm
-from em.efm_manager import compute_efms, get_binary_efm_length
-from em.efm_serialization_manager import serialize_efms_xslx, serialize_efms_txt, efm2sbml, \
-    get_pattern_sorter, serialize_patterns, r_ids2sbml, serialize_important_reactions
 from utils.path_manager import create_dirs
 
 __author__ = 'anna'

@@ -1,6 +1,7 @@
 from collections import defaultdict
 import logging
-from em.efm_manager import get_binary_efm_length
+
+from constraint_based_analysis.efm.efm_manager import get_binary_efm_length
 
 __author__ = 'anna'
 

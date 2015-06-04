@@ -278,7 +278,6 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
 
                 if r_ids:
                     efm = {r_id: val for (r_id, val) in efm.iteritems() if r_id in r_ids}
-                    # em_support = tuple(sorted((r_id, val > 0) for (r_id, val) in em.iteritems()))
                 em_support, coefficients = efm2binary(efm, all_r_ids, rev_r_ids, int_size)
                 if not r_ids or em_support not in processed:
                     efms.append((em_support, coefficients))

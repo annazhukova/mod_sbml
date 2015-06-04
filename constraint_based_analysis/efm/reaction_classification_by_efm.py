@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from em.efm_manager import binary2efm, get_int_size
+from constraint_based_analysis.efm.efm_manager import binary2efm, get_int_size
 
 __author__ = 'anna'
 
