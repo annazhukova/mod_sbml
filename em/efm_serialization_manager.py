@@ -1,15 +1,19 @@
 from collections import defaultdict
+from dircache import listdir
 import logging
 import math
+import os
 import sys
 
 import libsbml
 import openpyxl
+import re
 
 from em.efm_manager import binary2efm, get_binary_efm_length, get_int_size
 from sbml.sbml_manager import get_r_comps, submodel, get_kegg_r_id
 from serialization.serialization_manager import get_sbml_r_formula
 from serialization.xlsx_helper import BASIC_STYLE, save_data
+from utils import misc
 
 SIMPLE_PATTERN_SORTER = lambda p_id: -p_id
 
@@ -76,11 +80,27 @@ def serialize_efms_txt(sbml, efms, r_ids, reversible_r_ids, path):
     model = doc.getModel()
     int_size = math.log(sys.maxint) / math.log(2)
     with open(path, 'w+') as f:
+        f.write('Found %d EFMs:\n' % len(efms))
         for (binary_efm, coefficients) in sorted(efms, key=lambda (_, coefficients): len(coefficients)):
             r_id2coefficient = binary2efm(binary_efm, r_ids, reversible_r_ids, int_size, coefficients)
             f.write(', '.join('%g %s' % (r_id2coefficient[r_id], r_id)
                               for r_id in sorted(r_id2coefficient.iterkeys(),
                                                  key=lambda r_id: (sorted(get_r_comps(r_id, model)), r_id))) + '\n')
+
+
+def serialize_i2efms_txt(sbml, i2efms, r_ids, reversible_r_ids, path):
+    doc = libsbml.SBMLReader().readSBML(sbml)
+    model = doc.getModel()
+    int_size = math.log(sys.maxint) / math.log(2)
+    with open(path, 'w+') as f:
+        for i in sorted(i2efms.iterkeys()):
+            (binary_efm, coefficients) = i2efms[i]
+            r_id2coefficient = binary2efm(binary_efm, r_ids, reversible_r_ids, int_size, coefficients)
+            f.write('%d\t(len=%d)\t%s\n' % (i, len(r_id2coefficient),
+                                            ', '.join('%g %s' % (r_id2coefficient[r_id], r_id)
+                                                      for r_id in sorted(r_id2coefficient.iterkeys(),
+                                                                         key=lambda r_id:
+                                                                         (sorted(get_r_comps(r_id, model)), r_id)))))
 
 
 def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, r_ids, rev_r_ids, binary):
@@ -90,18 +110,25 @@ def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, r_ids, rev_r
             efm, coeffs = efm
         else:
             coeffs = None
-        r_id2coeff = binary2efm(efm, r_ids, rev_r_ids, int_size, coeffs, binary)
-        doc = libsbml.SBMLReader().readSBML(sbml)
-        model = doc.getModel()
-        submodel(set(r_id2coeff.iterkeys()), model)
         suffix = get_name_suffix(efm_id)
-        model.setId('%s_%s_%d_%s' % (model.getId(), name_prefix, efm_id, suffix))
-        model.setName('%s_%s_%d_%s' % (model.getName(), name_prefix, efm_id, suffix))
-        for (r_id, coeff) in r_id2coeff.iteritems():
-            r = model.getReaction(r_id)
-            r_name = r.getName()
-            r.setName('%g %s' % (coeff, r_name) if abs(coeff) != 1 else (r_name if coeff > 0 else ('-' + r_name)))
-        libsbml.SBMLWriter().writeSBMLToFile(doc, '%s/%s_%d_%s.xml' % (directory, name_prefix, efm_id, suffix))
+        r_id2coeff = binary2efm(efm, r_ids, rev_r_ids, int_size, coeffs, binary)
+        r_ids2sbml(r_id2coeff.keys(), sbml, '%s/%s_%d_%s.xml' % (directory, name_prefix, efm_id, suffix),
+                   '%s_%d_%s' % (name_prefix, efm_id, suffix),
+                   lambda r: '%g %s' % (r_id2coeff[r.getId()], r.getName())
+                   if abs(r_id2coeff[r.getId()]) != 1
+                   else (r.getName() if r_id2coeff[r.getId()] > 0 else ('-%s' % r.getName())))
+
+
+def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_name_replacer=lambda r: r.getName()):
+    doc = libsbml.SBMLReader().readSBML(sbml)
+    model = doc.getModel()
+    submodel(r_ids, model)
+    model.setId('%s_%s' % (model.getId(), suffix))
+    model.setName('%s_%s' % (model.getName(), suffix))
+    for r_id in r_ids:
+        r = model.getReaction(r_id)
+        r.setName(r_name_replacer(r))
+    libsbml.SBMLWriter().writeSBMLToFile(doc, out_sbml)
 
 
 def serialize_acom_patterns(clusters, output_file, sbml, r_id2style=basic_r_style):
@@ -122,6 +149,13 @@ def serialize_acom_patterns(clusters, output_file, sbml, r_id2style=basic_r_styl
                   styles=styles)
         i += 1
     wb.save(output_file)
+
+
+def serialize_important_reactions(r_id2efm_ids, model, output_file):
+    with open(output_file, 'w+') as f:
+        for r_id, efm_ids in sorted(r_id2efm_ids.iteritems(), key=lambda (_, efm_ids): -len(efm_ids)):
+            f.write('(%d)\t%s\t%s\n' % (len(efm_ids), r_id,
+                                    get_sbml_r_formula(model, model.getReaction(r_id[1:] if '-' == r_id[0] else r_id))))
 
 
 def serialize_patterns(p_id2efm_ids, id2pattern, r_ids, reversible_r_ids, output_file, sorter=SIMPLE_PATTERN_SORTER):
@@ -160,10 +194,10 @@ def serialize_patterns(p_id2efm_ids, id2pattern, r_ids, reversible_r_ids, output
         p_string = '\t'.join('%s%s' % ('-' if coeff < 0 else '', r_id)
                              for (r_id, coeff) in
                              binary2efm(pattern, r_ids, reversible_r_ids, int_size, binary=True).iteritems())
-        f.write("(%d, %d)\t%s\n" % (p_length, efm_len, p_string))
+        f.write("%d\t(%d, %d)\t%s\n" % (p_id, p_length, efm_len, p_string))
 
     with open(output_file, 'w+') as f:
-        f.write("!(p_length, efm_num)\tpattern\n")
+        f.write("!id\t(length, efm_num)\tpattern\n")
         for p_id in sorted(p_id2efm_ids.iterkeys(), key=sorter):
             log_pattern(p_id, f)
 
