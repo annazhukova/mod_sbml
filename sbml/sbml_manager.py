@@ -346,26 +346,6 @@ def get_r_ids_by_comp(model, comps, strict=False):
     return r_ids
 
 
-def submodel(r_ids_to_keep, model):
-    for r_id in [r.id for r in model.getListOfReactions() if not r.id in r_ids_to_keep]:
-        model.removeReaction(r_id)
-    s_ids_to_keep = set()
-    for r in model.getListOfReactions():
-        s_ids_to_keep |= get_metabolites(r)
-    for s_id in [s.id for s in model.getListOfSpecies() if not s.id in s_ids_to_keep]:
-        model.removeSpecies(s_id)
-    c_ids_to_keep = {s.getCompartment() for s in model.getListOfSpecies()}
-    c_ids_to_add = set()
-    for c_id in c_ids_to_keep:
-        while c_id:
-            c_id = model.getCompartment(c_id).getOutside()
-            if c_id and c_id not in c_ids_to_keep | c_ids_to_add:
-                c_ids_to_add.add(c_id)
-    c_ids_to_keep |= c_ids_to_add
-    for c_id in [c.id for c in model.getListOfCompartments() if c.id not in c_ids_to_keep]:
-        model.removeCompartment(c_id)
-
-
 def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
     s_id2r_ids, r_id2s_ids = defaultdict(set), {}
     for r in model.getListOfReactions():

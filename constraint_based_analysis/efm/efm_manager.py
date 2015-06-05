@@ -211,27 +211,29 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     i = rev_r_id2i[r_id] if rev else r_id2i[r_id]
     # Compute EFMs using TreeEFM software (Pey et al. 2014, PMID: 25380956)
     em_file = "%s/FV-EM.dat" % directory
-    os.system("%s -r %d -i %s -l EM -e %d -o %s" % (tree_efm_path, i, st_matrix_file, em_number, directory))
+    os.system("%s -r %d -i %s -l EM -e %d -o %s -z %d" % (tree_efm_path, i, st_matrix_file, em_number, directory,
+                                                          threshold))
     os.system("%s -b %s" % (tree_efm_path, em_file))
     em_file = "%s.txt" % em_file
     logging.info("elementary modes saved to %s" % em_file)
     # Filter EFMs so that only those that don't include the reaction in opposite directions are left.
     # If r_id2rev are specified, filter EFMs to leave only those that include these reactions in these directions.
     em_file_filtered = "%s/FV-EM_filtered.dat.txt" % directory
-    efms = filter_efms(em_file, r_id2i, rev_r_id2i, em_file_filtered, r_id2rev_2threshold, zero_threshold=threshold,
-                      r_ids=r_ids)
+    efms, all_r_ids, rev_r_ids = filter_efms(em_file, r_id2i, rev_r_id2i, em_file_filtered, r_id2rev_2threshold,
+                                             zero_threshold=threshold, r_ids=r_ids)
     logging.info(
         "%d elementary modes corresponding to reactions of interest saved to %s" % (len(efms), em_file_filtered))
     efms = sorted(efms, key=lambda (binary_efm, coeffs): len(coeffs))
-    return efms, r_ids if r_ids else sorted(set(r_id2i.iterkeys()) | set(rev_r_id2i.iterkeys()))
+    return efms, all_r_ids, rev_r_ids
 
 
-def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero_threshold=0.0, r_ids=None):
+def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero_threshold=0.0,
+                r_ids=None):
     i2r_id = {i: (r_id, False) for (r_id, i) in r_id2i.iteritems()}
     i2r_id.update({i: (r_id, True) for (r_id, i) in rev_r_id2i.iteritems()})
     all_r_ids = r_ids if r_ids else sorted(set(r_id2i.iterkeys()) | set(rev_r_id2i.iterkeys()))
     rev_r_ids = set(rev_r_id2i.iterkeys())
-    int_size = math.log(sys.maxint) / math.log(2)
+    int_size = get_int_size()
     processed = set()
     efms = []
     round_value = lambda v: round(float(v), PRECISION)
@@ -259,8 +261,6 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                 # => don't want such an EFM
                 if bad_em:
                     continue
-
-                # Check if all the reactions that are required are there
                 bad_em = False
                 if r_id2rev_2threshold:
                     for (r_id2rev, present_reaction_threshold) in r_id2rev_2threshold:
@@ -279,11 +279,12 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                 if r_ids:
                     efm = {r_id: val for (r_id, val) in efm.iteritems() if r_id in r_ids}
                 em_support, coefficients = efm2binary(efm, all_r_ids, rev_r_ids, int_size)
+
                 if not r_ids or em_support not in processed:
                     efms.append((em_support, coefficients))
                     if r_ids:
                         processed.add(em_support)
-    return efms
+    return efms, all_r_ids, rev_r_ids
 
 
 def stoichiometric_matrix(model, path):

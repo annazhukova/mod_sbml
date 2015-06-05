@@ -4,7 +4,7 @@ import libsbml
 from constraint_based_analysis.cobra_constraint_based_analysis.fba_manager import get_fluxes_larger_than_threshold, \
     optimise_biomass, show_reaction_values, serialize_fluxes
 from constraint_based_analysis.cobra_constraint_based_analysis.model_manager import format_r_id
-from sbml.sbml_manager import submodel
+from sbml.submodel_manager import submodel
 from serialization.serialization_manager import get_cobra_r_formula
 
 __author__ = 'anna'

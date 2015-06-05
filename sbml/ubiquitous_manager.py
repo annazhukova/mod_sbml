@@ -1,5 +1,6 @@
 from collections import Counter
-from onto.chebi_annotator import CONJUGATE_ACID_BASE_RELATIONSHIPS, get_chebi, get_species_to_chebi, get_cofactors
+from onto.chebi_annotator import CONJUGATE_ACID_BASE_RELATIONSHIPS, get_chebi, get_species_to_chebi, get_cofactors, \
+    add_equivalent_chebi_ids
 
 from onto.obo_ontology import parse
 from sbml.sbml_manager import get_metabolites
@@ -68,3 +69,11 @@ def get_ubiquitous_species_ids(model, ubiquitous_threshold=UBIQUITOUS_THRESHOLD)
     ubiquitous_chebi_ids = cofactors | get_ubiquitous_chebi_ids(model, species_id2chebi_id, onto, ubiquitous_threshold)
     return {s.id for s in model.getListOfSpecies() if
             s.id in species_id2chebi_id and species_id2chebi_id[s.id] in ubiquitous_chebi_ids}
+
+
+def get_cofactor_m_ids(model):
+    chebi = parse(get_chebi())
+    cofactors = get_cofactors(chebi) | COMMON_UB_IDS
+    add_equivalent_chebi_ids(chebi, cofactors)
+    s_id2ch_id = get_species_to_chebi(model, chebi, guess=True)
+    return {s_id for s_id in s_id2ch_id.iterkeys() if s_id2ch_id[s_id] in cofactors}

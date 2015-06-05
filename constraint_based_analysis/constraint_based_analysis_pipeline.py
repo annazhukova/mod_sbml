@@ -12,15 +12,15 @@ ZERO_THRESHOLD = 1e-9
 
 __author__ = 'anna'
 
-def analyse_model(sbml, out_rev, out_r_id, in_r_id2rev_2threshold, res_dir, constraint_cobra_reactions=None,
-                  threshold=ZERO_THRESHOLD, do_fva=True, do_fba=True, do_efm=True,
-                  save_efm_sbml=False, max_efm_number=10000, min_pattern_len=0, min_efm_num_per_pattern=0,
-                  save_pattern_sbml=True):
+def analyse_model(sbml, out_r_id, out_rev, in_r_id2rev_2threshold, res_dir, constraint_cobra_reactions=None,
+                  threshold=ZERO_THRESHOLD, do_fva=True, do_fba=True, do_efm=True, save_efm_sbml=False,
+                  max_efm_number=10000, min_pattern_len=0, min_efm_num_per_pattern=0, save_pattern_sbml=True):
     # create directories to store results
-    create_dirs(res_dir)
+    create_dirs(res_dir, False)
     # copy our model there
-    shutil.copy(sbml, res_dir)
-    sbml = os.path.join(res_dir, os.path.basename(sbml))
+    if os.path.normpath(res_dir) != os.path.normpath(os.path.dirname(sbml)):
+        shutil.copy(sbml, res_dir)
+        sbml = os.path.join(res_dir, os.path.basename(sbml))
 
     if do_fva:
         fva_dir = os.path.join(res_dir, 'fva/')
@@ -31,14 +31,15 @@ def analyse_model(sbml, out_rev, out_r_id, in_r_id2rev_2threshold, res_dir, cons
             constraint_cobra_reactions(cobra_model)
 
         sbml = analyse_by_fva(cobra_model, out_r_id, fva_dir, 'minimize' if out_rev else 'maximize',
-                                     threshold=threshold, sbml=sbml)
+                              threshold=threshold, sbml=sbml)
 
     if do_fba:
         fba_dir = os.path.join(res_dir, 'fba/')
         create_dirs(fba_dir)
 
         cobra_model = create_cobra_model_from_sbml_file(sbml)
-        constraint_cobra_reactions(cobra_model)
+        if constraint_cobra_reactions:
+            constraint_cobra_reactions(cobra_model)
 
         # FBA
         analyse_by_fba(cobra_model, directory=fba_dir,

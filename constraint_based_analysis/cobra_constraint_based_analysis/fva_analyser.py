@@ -5,7 +5,8 @@ from constraint_based_analysis.cobra_constraint_based_analysis.fba_manager impor
     get_r_id2fva_bounds
 from constraint_based_analysis.cobra_constraint_based_analysis.model_manager import format_r_id
 from gibbs.reaction_boundary_manager import set_bounds
-from sbml.sbml_manager import submodel, reverse_reaction
+from sbml.sbml_manager import reverse_reaction
+from sbml.submodel_manager import submodel
 from serialization.serialization_manager import get_cobra_r_formula
 
 __author__ = 'anna'
