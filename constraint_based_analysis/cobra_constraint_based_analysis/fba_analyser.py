@@ -1,32 +1,29 @@
 import logging
 import os
-import libsbml
+
 from constraint_based_analysis.cobra_constraint_based_analysis.fba_manager import get_fluxes_larger_than_threshold, \
     optimise_biomass, show_reaction_values, serialize_fluxes
 from constraint_based_analysis.cobra_constraint_based_analysis.model_manager import format_r_id
-from sbml.submodel_manager import submodel
+from constraint_based_analysis.efm.efm_serialization_manager import r_ids2sbml
+from sbml.sbml_manager import reverse_reaction
 from serialization.serialization_manager import get_cobra_r_formula
 
 __author__ = 'anna'
 
 
 def create_fba_model(sbml, r_id2val, res_dir):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
-    submodel(set(r_id2val.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2val.iterkeys()} |
-             {'R_' + format_r_id(r_id, False) for r_id in r_id2val.iterkeys()}, model)
-    model.setId('%s_FBA' % model.getId())
-    model.setName('%s_FBA' % model.getName())
-    for (r_id, val) in r_id2val.iteritems():
-        r = model.getReaction(r_id)
-        if not r:
-            r = model.getReaction(format_r_id(r_id, False))
-        if not r:
-            r = model.getReaction('R_' + format_r_id(r_id, False))
-        r.setName('%s: %g' % (r.getId(), val))
-    sbml = os.path.join(res_dir, 'Model_FBA.xml')
-    libsbml.SBMLWriter().writeSBMLToFile(doc, sbml)
-    return sbml
+    def r_updater(r):
+        val = r_id2val[format_r_id(r.id)]
+        if val < 0:
+            reverse_reaction(r)
+            r.setName('%g -%s' % (-val, r.id))
+        else:
+            r.setName('%g %s' % (val, r.id))
+
+    r_ids = set(r_id2val.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2val.iterkeys()}
+    new_sbml = os.path.join(res_dir, 'Model_FBA.xml')
+    r_ids2sbml(r_ids, sbml, new_sbml, 'FBA', r_updater)
+    return new_sbml
 
 
 def analyse_by_fba(cobra_model, bm_r_id, directory, objective_sense='maximize', threshold=0,
@@ -47,7 +44,6 @@ def analyse_by_fba(cobra_model, bm_r_id, directory, objective_sense='maximize', 
                              "%s production (micromol/min/gDW)" % bm_r_id,
                              "Effect of varying %s on %s" % (var_r.name, bm_r_id),
                              var_r.upper_bound * 2.5, minimized=False, constrained=False)
-
     if sbml:
         sbml = create_fba_model(sbml, r_id2val, directory)
     return sbml

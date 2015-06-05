@@ -7,7 +7,7 @@ import libsbml
 import openpyxl
 
 from constraint_based_analysis.efm.efm_manager import binary2efm, get_binary_efm_length, get_int_size
-from sbml.sbml_manager import get_r_comps, get_kegg_r_id
+from sbml.sbml_manager import get_r_comps, get_kegg_r_id, reverse_reaction
 from sbml.submodel_manager import submodel
 from serialization.serialization_manager import get_sbml_r_formula
 from serialization.xlsx_helper import BASIC_STYLE, save_data
@@ -109,14 +109,20 @@ def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, r_ids, rev_r
             coeffs = None
         suffix = get_name_suffix(efm_id)
         r_id2coeff = binary2efm(efm, r_ids, rev_r_ids, int_size, coeffs, binary)
+
+        def r_updater(r):
+            coeff = r_id2coeff[r.id]
+            if coeff < 0:
+                reverse_reaction(r)
+                r.setName(('%g -%s' % (-coeff, r.id)) if coeff != -1 else ('-%s' % r.id))
+            else:
+                r.setName(('%g %s' % (coeff, r.id)) if coeff != 1 else ('%s' % r.id))
+
         r_ids2sbml(r_id2coeff.keys(), sbml, '%s/%s_%d_%s.xml' % (directory, name_prefix, efm_id, suffix),
-                   '%s_%d_%s' % (name_prefix, efm_id, suffix),
-                   lambda r: '%g %s' % (r_id2coeff[r.getId()], r.getName())
-                   if abs(r_id2coeff[r.getId()]) != 1
-                   else (r.getName() if r_id2coeff[r.getId()] > 0 else ('-%s' % r.getName())))
+                   '%s_%d_%s' % (name_prefix, efm_id, suffix), r_updater)
 
 
-def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_name_replacer=lambda r: r.getName()):
+def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_updater=lambda r: 0):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
     submodel(r_ids, model)
@@ -124,7 +130,8 @@ def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_name_replacer=lambda r: r.get
     model.setName('%s_%s' % (model.getName(), suffix))
     for r_id in r_ids:
         r = model.getReaction(r_id)
-        r.setName(r_name_replacer(r))
+        if r:
+            r_updater(r)
     libsbml.SBMLWriter().writeSBMLToFile(doc, out_sbml)
 
 

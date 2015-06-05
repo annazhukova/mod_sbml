@@ -1,12 +1,12 @@
 import logging
 import os
-import libsbml
+
 from constraint_based_analysis.cobra_constraint_based_analysis.fba_manager import serialize_fva, optimise_biomass, \
     get_r_id2fva_bounds
 from constraint_based_analysis.cobra_constraint_based_analysis.model_manager import format_r_id
+from constraint_based_analysis.efm.efm_serialization_manager import r_ids2sbml
 from gibbs.reaction_boundary_manager import set_bounds
 from sbml.sbml_manager import reverse_reaction
-from sbml.submodel_manager import submodel
 from serialization.serialization_manager import get_cobra_r_formula
 
 __author__ = 'anna'
@@ -30,43 +30,32 @@ def analyse_by_fva(cobra_model, bm_r_id, directory, objective_sense='maximize', 
 
 
 def create_fva_model(sbml, r_id2bounds, res_dir):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
+    def r_updater(r):
+        l_b, u_b = r_id2bounds[format_r_id(r.id)]
+        if u_b < 0:
+            reverse_reaction(r)
+            r.setName('-%s' % r.id)
+            set_bounds(r, -u_b, -l_b)
+        else:
+            r.setName(r.getId())
+            set_bounds(r, l_b, u_b)
 
-    sbml = os.path.join(res_dir, 'Model_FVA.xml')
-    submodel(set(r_id2bounds.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2bounds.iterkeys()} |
-             {'R_' + format_r_id(r_id, False) for r_id in r_id2bounds.iterkeys()}, model)
-    model.setId('%s_FVA' % model.getId())
-    model.setName('%s_FVA' % model.getName())
-    for r_id, (l_b, u_b) in r_id2bounds.iteritems():
-        r = model.getReaction(r_id)
-        if not r:
-            r = model.getReaction(format_r_id(r_id, False))
-        if not r:
-            r = model.getReaction('R_' + format_r_id(r_id, False))
-        set_bounds(r, l_b, u_b)
-    libsbml.SBMLWriter().writeSBMLToFile(doc, sbml)
-    return sbml
+    r_ids = set(r_id2bounds.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2bounds.iterkeys()}
+    new_sbml = os.path.join(res_dir, 'Model_FVA.xml')
+    r_ids2sbml(r_ids, sbml, new_sbml, 'FVA', r_updater)
+    return new_sbml
 
 
 def create_essential_r_ids_model(sbml, r_id2rev, res_dir):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
-    m_id = model.getId()
-    m_name = model.getName()
-
-    sbml = os.path.join(res_dir, 'Model_common.xml')
-    submodel(set(r_id2rev.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2rev.iterkeys()} |
-             {'R_' + format_r_id(r_id, False) for r_id in r_id2rev.iterkeys()}, model)
-    model.setId('%s_common' % m_id)
-    model.setName('%s_common' % m_name)
-    for r_id, rev in r_id2rev.iteritems():
-        if rev:
-            r = model.getReaction(r_id)
-            if not r:
-                r = model.getReaction(format_r_id(r_id, False))
-            if not r:
-                r = model.getReaction('R_' + format_r_id(r_id, False))
+    def r_updater(r):
+        rev = r_id2rev[format_r_id(r.id)]
+        if rev < 0:
             reverse_reaction(r)
-    libsbml.SBMLWriter().writeSBMLToFile(doc, sbml)
-    return sbml
+            r.setName('-%s' % r.id)
+        else:
+            r.setName(r.getId())
+
+    r_ids = set(r_id2rev.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2rev.iterkeys()}
+    new_sbml = os.path.join(res_dir, 'Model_common.xml')
+    r_ids2sbml(r_ids, sbml, new_sbml, 'common', r_updater)
+    return new_sbml

@@ -8,6 +8,7 @@ from constraint_based_analysis.efm.efm_manager import compute_efms, get_binary_e
 from constraint_based_analysis.efm.efm_serialization_manager import efm2sbml, serialize_efms_txt, serialize_efms_xslx, \
     serialize_important_reactions, r_ids2sbml, get_pattern_sorter, serialize_patterns
 from constraint_based_analysis.efm.reaction_classification_by_efm import classify_reactions_by_efm
+from sbml.sbml_manager import reverse_reaction
 
 from utils.path_manager import create_dirs
 
@@ -77,12 +78,19 @@ def perform_efma(in_r_id, in_r_reversed, out_r_id2rev_2threshold, sbml, director
                         if len(efm_ids) > min_efm_num_per_pattern}
         important_r_ids = {r_id[1:] if '-' == r_id[0] else r_id for r_id in r_id2efm_ids.iterkeys()}
         serialize_important_reactions(r_id2efm_ids, model, os.path.join(rn_dir, 'r_list.txt'))
+
+        def r_updater(r):
+            rev_r_id = '-%s' % r.id
+            rev = (rev_r_id in r_id2efm_ids and
+                   (r.id not in r_id2efm_ids or len(r_id2efm_ids[r.id]) < len(r_id2efm_ids[rev_r_id])))
+            if rev:
+                reverse_reaction(r)
+                r.setName(rev_r_id)
+            else:
+                r.setName(r.id)
+
         r_ids2sbml(important_r_ids, sbml, '%s/Model_important.xml' % rn_dir,
-                   suffix='important', r_name_replacer=\
-                       lambda r: '%s%s' % ('-' if ('-%s' % r.id in r_id2efm_ids
-                                                   and (r.id not in r_id2efm_ids
-                                                        or len(r_id2efm_ids[r.id]) < len(r_id2efm_ids['-%s' % r.id])))
-                                           else '', r.name))
+                   suffix='important', r_updater=r_updater)
 
     if calculate_patterns:
         pattern_dir = os.path.join(directory, 'patterns/')
