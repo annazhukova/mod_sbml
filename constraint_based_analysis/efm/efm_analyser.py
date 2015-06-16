@@ -2,6 +2,7 @@ import logging
 import os
 
 import libsbml
+
 from constraint_based_analysis.efm.acom_classification import acom_classification
 from constraint_based_analysis.efm.efm_classification import classify_efms
 from constraint_based_analysis.efm.efm_manager import compute_efms, get_binary_efm_length
@@ -9,20 +10,19 @@ from constraint_based_analysis.efm.efm_serialization_manager import efm2sbml, se
     serialize_important_reactions, r_ids2sbml, get_pattern_sorter, serialize_patterns
 from constraint_based_analysis.efm.reaction_classification_by_efm import classify_reactions_by_efm
 from sbml.sbml_manager import reverse_reaction
-
 from utils.path_manager import create_dirs
 
 __author__ = 'anna'
 
 
-ZERO_THRESHOLD = 1e-9
+ZERO_THRESHOLD = 1e-6
 
 def perform_efma(in_r_id, in_r_reversed, out_r_id2rev_2threshold, sbml, directory, r_ids=None,
-                 tree_efm_path="/home/anna/Applications/TreeEFM/tool/TreeEFMseq", max_efm_number=10000, efms=None,
+                 tree_efm_path="/home/anna/Applications/TreeEFM/tool/TreeEFMseq", max_efm_number=1000, efms=None,
                  threshold=ZERO_THRESHOLD, output_efm_file=None, convert_efms2sbml=False,
                  acom_path='/home/anna/Applications/acom-c/acom-c', min_acom_pattern_len=0, similarity_threshold=0,
                  calculate_patterns=True, min_pattern_len=0, min_efm_num_per_pattern=0, convert_patterns2sbml=True,
-                 calculate_important_reactions=True):
+                 calculate_important_reactions=True, imp_rn_threshold=None):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
 
@@ -34,13 +34,17 @@ def perform_efma(in_r_id, in_r_reversed, out_r_id2rev_2threshold, sbml, director
             raise ValueError('No EFMs found :(. Probably, you forgot to specify TreeEFM path?')
         rev_r_ids = {r_id for r_id in r_ids if model.getReaction(r_id).getReversible()}
 
+    if not efms:
+        logging.info('Found no EFMs of interest.')
+        return
+
     id2efm = dict(zip(xrange(1, len(efms) + 1), efms))
 
     if output_efm_file:
         if -1 != output_efm_file.find('.xslx'):
             serialize_efms_xslx(sbml, efms, r_ids, rev_r_ids, output_efm_file)
         else:
-            serialize_efms_txt(sbml, efms, r_ids, rev_r_ids, output_efm_file)
+            serialize_efms_txt(sbml, id2efm, r_ids, rev_r_ids, output_efm_file)
 
     if convert_efms2sbml:
         efm_dir = os.path.join(directory, 'efm_sbml/')
@@ -54,9 +58,9 @@ def perform_efma(in_r_id, in_r_reversed, out_r_id2rev_2threshold, sbml, director
 
     if acom_path:
         if not min_acom_pattern_len:
-            min_acom_pattern_len = avg_efm_len / 3
+            min_acom_pattern_len = avg_efm_len / 4
         if not similarity_threshold:
-            similarity_threshold = min(5 * min_acom_pattern_len / 3, 2 * avg_efm_len / 3)
+            similarity_threshold = 2 * min_acom_pattern_len
 
         acom_dir = os.path.join(directory, 'acom/')
         create_dirs(acom_dir)
@@ -65,17 +69,20 @@ def perform_efma(in_r_id, in_r_reversed, out_r_id2rev_2threshold, sbml, director
                             similarity_threshold=similarity_threshold, min_pattern_length=min_acom_pattern_len)
 
     if not min_pattern_len:
-        min_pattern_len = 5 * avg_efm_len / 7
+        min_pattern_len = avg_efm_len / 4
     if not min_efm_num_per_pattern:
-        min_efm_num_per_pattern = len(efms) / 4
+        min_efm_num_per_pattern = len(efms) / 5
 
     if calculate_important_reactions:
+        if imp_rn_threshold is None:
+            imp_rn_threshold = min_efm_num_per_pattern
+
         rn_dir = os.path.join(directory, 'important_reactions/')
         create_dirs(rn_dir)
 
         r_id2efm_ids = classify_reactions_by_efm(id2efm, r_ids, rev_r_ids)
         r_id2efm_ids = {r_id: efm_ids for (r_id, efm_ids) in r_id2efm_ids.iteritems()
-                        if len(efm_ids) > min_efm_num_per_pattern}
+                        if len(efm_ids) > imp_rn_threshold}
         important_r_ids = {r_id[1:] if '-' == r_id[0] else r_id for r_id in r_id2efm_ids.iterkeys()}
         serialize_important_reactions(r_id2efm_ids, model, os.path.join(rn_dir, 'r_list.txt'))
 

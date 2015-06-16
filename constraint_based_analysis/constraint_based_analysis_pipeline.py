@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -14,7 +15,8 @@ __author__ = 'anna'
 
 def analyse_model(sbml, out_r_id, out_rev, in_r_id2rev_2threshold, res_dir, constraint_cobra_reactions=None,
                   threshold=ZERO_THRESHOLD, do_fva=True, do_fba=True, do_efm=True, save_efm_sbml=False,
-                  max_efm_number=10000, min_pattern_len=0, min_efm_num_per_pattern=0, save_pattern_sbml=True):
+                  max_efm_number=1000, min_pattern_len=0, min_efm_num_per_pattern=0, save_pattern_sbml=True):
+    logging.info("Preparing directories...")
     # create directories to store results
     create_dirs(res_dir, False)
     # copy our model there
@@ -23,6 +25,7 @@ def analyse_model(sbml, out_r_id, out_rev, in_r_id2rev_2threshold, res_dir, cons
         sbml = os.path.join(res_dir, os.path.basename(sbml))
 
     if do_fva:
+        logging.info("Performing FVA...")
         fva_dir = os.path.join(res_dir, 'fva/')
         create_dirs(fva_dir)
 
@@ -34,6 +37,7 @@ def analyse_model(sbml, out_r_id, out_rev, in_r_id2rev_2threshold, res_dir, cons
                               threshold=threshold, sbml=sbml)
 
     if do_fba:
+        logging.info("Performing FBA...")
         fba_dir = os.path.join(res_dir, 'fba/')
         create_dirs(fba_dir)
 
@@ -47,6 +51,7 @@ def analyse_model(sbml, out_r_id, out_rev, in_r_id2rev_2threshold, res_dir, cons
                        threshold=threshold, sbml=sbml)
 
     if do_efm:
+        logging.info("Performing EFMA...")
         efm_dir = os.path.join(res_dir, 'efms/')
         create_dirs(efm_dir)
 

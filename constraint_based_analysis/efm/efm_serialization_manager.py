@@ -72,17 +72,19 @@ def serialize_efms_xslx(sbml, efms, r_ids, reversible_r_ids, path, r_id2style=ba
     wb.save(path)
 
 
-def serialize_efms_txt(sbml, efms, r_ids, reversible_r_ids, path):
+def serialize_efms_txt(sbml, id2efm, r_ids, reversible_r_ids, path):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
     int_size = math.log(sys.maxint) / math.log(2)
     with open(path, 'w+') as f:
-        f.write('Found %d EFMs:\n' % len(efms))
-        for (binary_efm, coefficients) in sorted(efms, key=lambda (_, coefficients): len(coefficients)):
+        f.write('Found %d EFMs:\n' % len(id2efm))
+        for efm_id in sorted(id2efm.iterkeys()):
+            binary_efm, coefficients = id2efm[efm_id]
             r_id2coefficient = binary2efm(binary_efm, r_ids, reversible_r_ids, int_size, coefficients)
-            f.write(', '.join('%g %s' % (r_id2coefficient[r_id], r_id)
-                              for r_id in sorted(r_id2coefficient.iterkeys(),
-                                                 key=lambda r_id: (sorted(get_r_comps(r_id, model)), r_id))) + '\n')
+            f.write('%d\t%s' % (efm_id, ', '.join('%g %s' % (r_id2coefficient[r_id], r_id)
+                                                  for r_id in sorted(r_id2coefficient.iterkeys(),
+                                                                     key=lambda r_id:
+                                                                     (sorted(get_r_comps(r_id, model)), r_id))) + '\n'))
 
 
 def serialize_i2efms_txt(sbml, i2efms, r_ids, reversible_r_ids, path):
@@ -199,6 +201,7 @@ def serialize_patterns(p_id2efm_ids, id2pattern, r_ids, reversible_r_ids, output
                              for (r_id, coeff) in
                              binary2efm(pattern, r_ids, reversible_r_ids, int_size, binary=True).iteritems())
         f.write("%d\t(%d, %d)\t%s\n" % (p_id, p_length, efm_len, p_string))
+        f.write("\tEFMs:\t%s\n" % ', '.join(str(efm_id) for efm_id in p_id2efm_ids[p_id]))
 
     with open(output_file, 'w+') as f:
         f.write("!id\t(length, efm_num)\tpattern\n")

@@ -237,6 +237,7 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
     processed = set()
     efms = []
     round_value = lambda v: round(float(v), PRECISION)
+    rejected_bad, rejected_different = 0, 0
     with open(out_path, 'w+') as out_f:
         with open(in_path, 'r') as in_f:
             for line in in_f:
@@ -260,8 +261,9 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                 # The same reaction participates in different directions
                 # => don't want such an EFM
                 if bad_em:
+                    rejected_bad += 1
                     continue
-                bad_em = False
+
                 if r_id2rev_2threshold:
                     for (r_id2rev, present_reaction_threshold) in r_id2rev_2threshold:
                         present_r_ids = set()
@@ -269,6 +271,7 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                             if r_id in efm and (rev is None or rev == (efm[r_id] < 0)):
                                 present_r_ids.add(r_id)
                         if len(present_r_ids) * 1.0 / len(r_id2rev) < present_reaction_threshold:
+                            rejected_different += 1
                             bad_em = True
                             break
                     if bad_em:
@@ -284,6 +287,11 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                     efms.append((em_support, coefficients))
                     if r_ids:
                         processed.add(em_support)
+    if rejected_different:
+        logging.info('Rejected %d EFMs as not all of the reactions of interest were present in them.'
+                     % rejected_different)
+    if rejected_bad:
+        logging.info('Rejected %d EFMs as they contained reversible reactions in both directions' % rejected_bad)
     return efms, all_r_ids, rev_r_ids
 
 

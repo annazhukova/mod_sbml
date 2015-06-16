@@ -86,7 +86,9 @@ def main(argv=None):
 
     perform_efma(in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(), sbml=sbml,
                  directory=model_dir, tree_efm_path=tree, efms=efms, r_ids=r_ids,
-                 output_efm_file='%s/efms.xlsx' % model_dir)
+                 output_efm_file='%s/efms.txt' % model_dir, imp_rn_threshold=0,
+                 calculate_important_reactions=True,
+                 calculate_patterns=True)
 
 
 if __name__ == "__main__":

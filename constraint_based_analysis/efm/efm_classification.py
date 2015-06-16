@@ -85,7 +85,9 @@ def classify_efms(efms, min_pattern_len, min_efm_num=2):
         logging.info("... found %d patterns." % len(patterns))
         level += 1
     filter_patterns(min_efm_num, p_id2efm_ids, pattern2id, pattern_child2parents)
-    id2pattern = {p_id: p for (p, p_id) in pattern2id.iteritems()}
+    id2id = dict(zip(pattern2id.itervalues(), xrange(1, len(pattern2id) + 1)))
+    id2pattern = {id2id[p_id]: p for (p, p_id) in pattern2id.iteritems()}
+    p_id2efm_ids = {id2id[p_id]: efm_ids for (p_id, efm_ids) in p_id2efm_ids.iteritems()}
     return p_id2efm_ids, id2pattern
 
 

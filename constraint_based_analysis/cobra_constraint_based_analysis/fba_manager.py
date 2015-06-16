@@ -3,6 +3,7 @@ import logging
 
 from cobra.flux_analysis import flux_variability_analysis
 from cobra import Reaction
+from cobra.flux_analysis.parsimonious import optimize_minimal_flux
 
 from constraint_based_analysis.cobra_constraint_based_analysis.model_manager import get_boundary_reactions, get_transport_reactions
 from serialization.plot_manager import create_plot, save_fig, create_subplot, initialise_fig
@@ -23,7 +24,7 @@ def set_bounds(reaction, value, max_up_b, max_l_b):
 def optimise_biomass(model, bm_id, objective_sense='maximize', level=logging.INFO):
     reaction = model.reactions.get_by_id(bm_id)
     model.change_objective([reaction])
-    model.optimize(objective_sense)
+    optimize_minimal_flux(model, objective_sense=objective_sense)
     if "optimal" != model.solution.status:
         logging.error("A problem occurred while calculating the solution for %s: %s"
                       % (format_r_name(reaction), model.solution.status))
