@@ -2,6 +2,8 @@ import logging
 import os
 import re
 import libsbml
+from constraint_based_analysis.efm.EFM import EFM
+from gibbs.reaction_boundary_manager import set_bounds
 
 __author__ = 'anna'
 
@@ -70,6 +72,7 @@ def convert_reaction(model, r_id, rev, r_m_id2st, p_m_id2st):
         r.setReversible(rev)
         add_metabolites_to_reaction(r, r_m_id2st, is_reactant=True)
         add_metabolites_to_reaction(r, p_m_id2st, is_reactant=False)
+        set_bounds(r, -10 if rev else 0, 10)
 
 
 def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
@@ -126,20 +129,22 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True):
     return r_rev_ids, r_irrev_ids
 
 
-def convert_metatool_output2efm(metatool_file, in_dat=None, r_rev_ids=None, r_irrev_ids=None):
+def convert_metatool_output2efm(metatool_file, in_dat=None, r_rev_ids=None, r_irrev_ids=None, r_id=None):
     """
     Extracts the EFM information from a given output file of Metatool
-    and converts them to a list of EFMs represented as dictionaries {r_id: coefficient}
+    and converts them to a list of EFMs.
 
     :param in_dat: input .dat file with the model (in the format accepted by Metatool),
     :param metatool_file: output file produced by Metatool,
-    :return: list of EFMs represented as dictionaries {r_id: coefficient}
+    :param r_id: (optional) reaction id, if specified only the EFMs containing this reaction will be considered.
+    :return: list of EFMs
     """
     if in_dat:
         r_rev_ids, r_irrev_ids = extract_r_ids_from_dat(in_dat)
     if not r_irrev_ids and not r_rev_ids:
         raise ValueError('You should either specify the reaction lists or the in_dat file!')
     sorted_r_ids = r_rev_ids + r_irrev_ids
+    r_rev_ids = set(r_rev_ids)
     efms = []
     with open(metatool_file, 'r') as f:
         line = next(f)
@@ -153,7 +158,9 @@ def convert_metatool_output2efm(metatool_file, in_dat=None, r_rev_ids=None, r_ir
             line = line.replace('\n', '').strip()
             if line:
                 coefficients = re.findall(r"[-+]?\d*\.*\d+", line)
-                efms.append({r_id: float(c) for (r_id, c) in zip(sorted_r_ids, coefficients) if float(c) != 0})
+                r_id2coefficient = {r_id: float(c) for (r_id, c) in zip(sorted_r_ids, coefficients) if float(c) != 0}
+                if not r_id or r_id in r_id2coefficient:
+                    efms.append(EFM(r_id2coeff=r_id2coefficient, r_ids=sorted_r_ids, rev_r_ids=r_rev_ids))
             line = next(f)
     return efms
 

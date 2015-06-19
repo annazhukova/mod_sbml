@@ -5,7 +5,6 @@ import libsbml
 
 from onto.obo_ontology import to_identifiers_org_format
 
-
 SBO_MATERIAL_ENTITY = "SBO:0000240"
 
 __author__ = 'anna'

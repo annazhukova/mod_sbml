@@ -2,8 +2,6 @@ from collections import defaultdict
 import logging
 from itertools import islice
 
-from constraint_based_analysis.efm.efm_manager import binary2efm, get_int_size
-
 __author__ = 'anna'
 
 
@@ -178,9 +176,8 @@ def classify_efms_with_acom(efms, r_ids, rev_r_ids, min_motif_length, neighbour_
     and a list of outliers: binary EFMs that were not clustered.
     """
     r_ids = sorted(r_ids)
-    int_size = get_int_size()
     # Convert EFMs to binary EFMs
-    binary_ems = [binary2efm(binary_efm, r_ids, rev_r_ids, int_size, coeffs, False) for (binary_efm, coeffs) in efms]
+    binary_ems = [efm.binary_efm for efm in efms]
     logging.info(
         "elementary modes converted to %d binary vectors" % len(binary_ems))
     # Classify binary EFMs using ACoM method (Peres et al. 2011, doi:10.1016/j.biosystems.2010.12.001)

@@ -3,8 +3,8 @@ import logging
 import os
 from os.path import dirname, abspath, basename
 import sys
+from constraint_based_analysis.constraint_based_analysis_pipeline import analyse_model
 from constraint_based_analysis.efm.efm_analyser import perform_efma
-from constraint_based_analysis.efm.efm_manager import efm2binary, get_int_size
 
 from constraint_based_analysis.efm.metatool_manager import convert_metatool_output2efm, convert_dat2sbml
 
@@ -73,22 +73,14 @@ def main(argv=None):
     if verbose:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s')
 
-    r_rev_ids, r_irrev_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=True)
-    r_ids = r_rev_ids + r_irrev_ids
+    r_rev_ids, r_irrev_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
     if efm_file:
-        efms = convert_metatool_output2efm(efm_file, r_rev_ids=r_rev_ids, r_irrev_ids=r_irrev_ids)
-        if r_id:
-            efms = [efm for efm in efms if r_id in efm]
-        int_size = get_int_size()
-        efms = [efm2binary(efm, r_ids, r_rev_ids, int_size) for efm in efms]
+        efms = convert_metatool_output2efm(efm_file, r_rev_ids=r_rev_ids, r_irrev_ids=r_irrev_ids, r_id=r_id)
     else:
         efms = None
 
-    perform_efma(in_r_id=r_id, in_r_reversed=False, out_r_id2rev_2threshold=(), sbml=sbml,
-                 directory=model_dir, tree_efm_path=tree, efms=efms, r_ids=r_ids,
-                 output_efm_file='%s/efms.txt' % model_dir, imp_rn_threshold=0,
-                 calculate_important_reactions=True,
-                 calculate_patterns=True)
+    analyse_model(sbml, out_r_id=r_id, out_rev=False, in_r_id2rev_2threshold=(), res_dir=model_dir,
+                  efms=efms, imp_rn_threshold=0, min_acom_pattern_len=7, do_fva=False)
 
 
 if __name__ == "__main__":

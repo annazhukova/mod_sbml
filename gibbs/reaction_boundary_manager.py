@@ -359,3 +359,8 @@ def update_bounds(model, infinity=1000):
             ke = kegg2ke[kegg]
             r_lower_bound, r_upper_bound = get_better_r_bounds(r, ke, result == REVERSED, infinity)
             set_bounds(r, r_lower_bound, r_upper_bound)
+
+
+def get_reversible(r):
+    l_b, u_b = get_bounds(r)
+    return l_b < 0

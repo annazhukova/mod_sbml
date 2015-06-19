@@ -297,7 +297,7 @@ def serialize_fva(model, r_id2bounds, path, r_ids=None, title=None):
                 f.write('\n')
         f.write("==============================\nOTHER FLUXES\n==============================\n")
         for (min_v, max_v) in keys:
-            if min_v * max_v == 0:
+            if min_v * max_v <= 0:
                 v_r_ids = values2r_ids[(min_v, max_v)]
                 if r_ids:
                     v_r_ids = set(v_r_ids) & r_ids
