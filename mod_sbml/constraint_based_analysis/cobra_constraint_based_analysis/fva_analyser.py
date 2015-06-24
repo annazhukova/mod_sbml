@@ -33,11 +33,11 @@ def analyse_by_fva(cobra_model, bm_r_id, directory, objective_sense='maximize', 
 
     if sbml:
         new_sbml = os.path.join(directory, 'Model_FVA.xml')
+        sbml = create_fva_model(sbml, r_id2bounds, new_sbml)
+        sbml = process_sbml(sbml, 'fva')
         essential_r_id2rev = {r_id: u < 0 for (r_id, (l, u)) in r_id2bounds.iteritems() if l * u > 0}
         ess_sbml = create_essential_r_ids_model(sbml, essential_r_id2rev, directory)
         process_sbml(ess_sbml, 'common')
-        sbml = create_fva_model(sbml, r_id2bounds, new_sbml)
-        process_sbml(sbml, 'fva')
     return r_id2bounds, sbml
 
 
@@ -67,6 +67,7 @@ def create_essential_r_ids_model(sbml, r_id2rev, res_dir):
             r.setName('-%s' % r.id)
         else:
             r.setName(r.getId())
+        r.setReversible(False)
 
     r_ids = set(r_id2rev.iterkeys()) | {format_r_id(r_id, False) for r_id in r_id2rev.iterkeys()}
     new_sbml = os.path.join(res_dir, 'Model_common.xml')

@@ -98,7 +98,9 @@ def read_efms(output_efm_file, r_ids, rev_r_ids):
     return id2efm
 
 
-def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, process_sbml=lambda sbml_file, path: True):
+def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, process_sbml=lambda sbml_file, path: True,
+             limit=None):
+    count = 0
     for efm_id, efm in id2efm.iteritems():
         suffix = get_name_suffix(efm_id)
         r_id2coeff = efm.to_r_id2coeff()
@@ -115,6 +117,9 @@ def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, process_sbml
         r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml,
                    '%s_%d_%s' % (name_prefix, efm_id, suffix), r_updater)
         process_sbml(new_sbml, '%s_%d_%s' % (name_prefix, efm_id, suffix))
+        count += 1
+        if limit and count >= limit:
+            break
 
 
 def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_updater=lambda r: True):

@@ -26,7 +26,7 @@ def perform_efma(target_r_id, target_r_reversed, r_id2rev_2threshold, sbml, dire
                  acom_path='/home/anna/Applications/acom-c/acom-c', min_acom_pattern_len=0, similarity_threshold=0,
                  calculate_patterns=True, min_pattern_len=0, max_pattern_number=10, convert_patterns2sbml=True,
                  calculate_important_reactions=True, imp_rn_threshold=None, rewrite=True,
-                 process_sbml=lambda sbml_file, path: True):
+                 process_sbml=lambda sbml_file, path, header: True):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
     if not r_ids:
@@ -64,7 +64,7 @@ def perform_efma(target_r_id, target_r_reversed, r_id2rev_2threshold, sbml, dire
         if imp_rn_threshold is None:
             imp_rn_threshold = len(all_id2efm) / 3
 
-        rn_dir = os.path.join(directory, 'important_reactions')
+        rn_dir = os.path.join(directory, 'important')
         create_dirs(rn_dir)
 
         r_id2efm_ids = classify_reactions_by_efm(all_id2efm)
@@ -135,6 +135,6 @@ def perform_efma(target_r_id, target_r_reversed, r_id2rev_2threshold, sbml, dire
             efm2sbml(id2pattern, directory=pattern_sbml_dir,
                      get_name_suffix=\
                          lambda p_id: 'of_%d_EFMs_of_len_%d' % (len(p_id2efm_ids[p_id]), len(id2pattern[p_id])),
-                     name_prefix='Pattern', sbml=sbml, process_sbml=process_sbml)
+                     name_prefix='Pattern', sbml=sbml, process_sbml=process_sbml, limit=3)
 
     return all_id2efm, important_r_ids
