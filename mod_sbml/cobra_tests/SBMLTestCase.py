@@ -27,11 +27,11 @@ def create_test_sbml():
     c_id = 'c'
     c.setId(c_id)
     for m_id in ('m1', 'm2', 'm3'):
-        convert_metabolite(m_id, c_id, model, False)
-    for (r_id, r_m_id2st, p_m_id2st, rev) in (('r1', [], [('m1', 1)], True), ('r2', [('m1', 1)], [('m2', 1)], True),
-                                              ('r3', [('m2', 1)], [], True), ('r4', [('m1', 1)], [('m3', 1)], True),
-                                              ('r5', [('m3', 1)], [], False),
-                                              ('r6', [('m3', 1)], [('m2', 1)], False)):
+        convert_metabolite(m_id, model, False, c_id='c')
+    for (r_id, r_m_id2st, p_m_id2st, rev) in (('r1', {}, {'m1': 1}, True), ('r2', {'m1': 1}, {'m2': 1}, True),
+                                              ('r3', {'m2': 1}, {}, True), ('r4', {'m1': 1}, {'m3': 1}, True),
+                                              ('r5', {'m3': 1}, {}, False),
+                                              ('r6', {'m3': 1}, {'m2': 1}, False)):
         convert_reaction(model, r_id, rev, r_m_id2st, p_m_id2st)
     libsbml.SBMLWriter().writeSBMLToFile(document, TEST_SBML)
 

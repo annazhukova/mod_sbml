@@ -36,27 +36,23 @@ class EFMTestCase(unittest.TestCase):
 
     def test_efm_num(self):
         all_id2efm, _ = \
-            perform_efma(target_r_id='r3', target_r_reversed=False, r_id2rev_2threshold=(), sbml=TEST_SBML,
-                         directory=EFM_DIR,
-                         acom_path=None, calculate_patterns=False,
-                         calculate_important_reactions=True, imp_rn_threshold=0, rewrite=True)
+            perform_efma(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={},
+                         acom_path=None, calculate_patterns=False, calculate_important_reactions=True,
+                         imp_rn_threshold=0, rewrite=True)
         self.assertEqual(2, len(all_id2efm), 'EFM number was supposed to be 2, got %g instead.' % len(all_id2efm))
 
     def test_efm_content(self):
         all_id2efm, _ = \
-            perform_efma(target_r_id='r3', target_r_reversed=False, r_id2rev_2threshold=(), sbml=TEST_SBML,
-                         directory=EFM_DIR,
-                         acom_path=None, calculate_patterns=False,
-                         calculate_important_reactions=True, imp_rn_threshold=0, rewrite=True)
+            perform_efma(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={},
+                         acom_path=None, calculate_patterns=False, calculate_important_reactions=False, rewrite=True)
         self.assertIn({'r1': 10, 'r2': 10, 'r3': 10}, [efm.to_r_id2coeff() for efm in all_id2efm.itervalues()],
                       'Failed to detect EFM: 10 r1, 10 r2, 10 r3')
 
     def test_important_reactions(self):
         _, important_r_ids = \
-            perform_efma(target_r_id='r3', target_r_reversed=False, r_id2rev_2threshold=(), sbml=TEST_SBML,
-                         directory=EFM_DIR,
-                         acom_path=None, calculate_patterns=False,
-                         calculate_important_reactions=True, imp_rn_threshold=0, rewrite=True)
+            perform_efma(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={},
+                         acom_path=None, calculate_patterns=False, calculate_important_reactions=True,
+                         imp_rn_threshold=0, rewrite=True)
         imp_rs = {'r1', 'r2', 'r3', 'r4', 'r6'}
         self.assertEqual(imp_rs, important_r_ids, "Important reactions were supposed to be %s, got %s"
                          % (imp_rs, important_r_ids))

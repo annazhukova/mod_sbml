@@ -214,7 +214,7 @@ def serialize_fluxes(model, r_id2val, path, r_ids=None, title=None):
     for r_id, value in r_id2val.iteritems():
         if not r_ids or r_id in r_ids:
             rn = model.reactions.get_by_id(r_id)
-            value2rn[value].append(r_id + ": " + get_cobra_r_formula(rn, comp=False))
+            value2rn[value].append(r_id + ": " + get_cobra_r_formula(rn, comp=True))
 
     prev_value = None
     with open(path, 'w+') as f:
@@ -294,7 +294,8 @@ def serialize_fva(model, r_id2bounds, path, r_ids=None, title=None):
                 value = format_values(min_v, max_v)
                 ess_count += len(v_r_ids)
                 for r_id in sorted(v_r_ids):
-                    f.write("%s\t%s: %s\n" % (value, r_id, model.reactions.get_by_id(r_id).build_reaction_string(True)))
+                    f.write("%s\t%s: %s\n" % (value, r_id,
+                                              get_cobra_r_formula(model.reactions.get_by_id(r_id), comp=True)))
                 f.write('\n')
         f.write("==============================\nOTHER FLUXES\n==============================\n")
         for (min_v, max_v) in keys:
@@ -305,10 +306,12 @@ def serialize_fva(model, r_id2bounds, path, r_ids=None, title=None):
                 value = format_values(min_v, max_v)
                 var_count += len(v_r_ids)
                 for r_id in sorted(v_r_ids):
-                    f.write("%s\t%s: %s\n" % (value, r_id, model.reactions.get_by_id(r_id).build_reaction_string(True)))
+                    f.write("%s\t%s: %s\n" % (value, r_id,
+                                              get_cobra_r_formula(model.reactions.get_by_id(r_id), comp=True)))
                 f.write('\n')
         f.write("==============================\n")
         f.write("In total, found %d essential reactions and %d variable reactions" % (ess_count, var_count))
+    return ess_count, var_count
 
 
 # The method find_blocked_reactions in COBRA fails as it tries to give unexpected parameters to the solver.

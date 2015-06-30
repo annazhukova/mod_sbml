@@ -21,7 +21,18 @@ COMMON_UB_IDS = {'chebi:37568', 'chebi:57783', 'chebi:17625', 'chebi:37563', 'ch
                  'chebi:13534', 'chebi:456216', 'chebi:456215', 'chebi:15351', 'chebi:30089', 'chebi:15422',
                  'chebi:57299', 'chebi:25805', 'chebi:26689', 'chebi:13390', 'chebi:57540', 'chebi:25524',
                  'chebi:13389', 'chebi:13392', 'chebi:28971', 'chebi:17984', 'chebi:29888', 'chebi:26020',
-                 'chebi:73342', 'chebi:35780', 'chebi:26078'}
+                 'chebi:73342', 'chebi:35780', 'chebi:26078', 'chebi:24636'} \
+                | {'chebi:15422', 'chebi:15846', 'chebi:15378', 'chebi:16908', 'chebi:16027', 'chebi:16474',
+                   'chebi:16761', 'chebi:17361', 'chebi:15713', 'chebi:17877', 'chebi:15366', 'chebi:17544',
+                   'chebi:17677', 'chebi:16240', 'chebi:15377', 'chebi:15379', 'chebi:17552', 'chebi:16311',
+                   'chebi:15346', 'chebi:17659', 'chebi:28862', 'chebi:16238', 'chebi:16526', 'chebi:17984',
+                   'chebi:16174', 'chebi:18009', 'chebi:15351', 'chebi:16039', 'chebi:18421', 'chebi:29033',
+                   'chebi:18075', 'chebi:18077', 'chebi:17808', 'chebi:18359', 'chebi:16497', 'chebi:16284',
+                   'chebi:28846', 'chebi:15996', 'chebi:17239', 'chebi:37565', 'chebi:18245', 'chebi:57287',
+                   'chebi:73342', 'chebi:33813', 'chebi:57783', 'chebi:57945', 'chebi:29375', 'chebi:82680',
+                   'chebi:58280', 'chebi:30616', 'chebi:61402', 'chebi:58189', 'chebi:57288', 'chebi:57692',
+                   'chebi:58307', 'chebi:28971', 'chebi:17093', 'chebi:456215', 'chebi:13534', 'chebi:73627',
+                   'chebi:17330', 'chebi:58107', 'chebi:29325'}
 
 EQUIVALENT_TERM_RELATIONSHIPS = CONJUGATE_ACID_BASE_RELATIONSHIPS | {'is_tautomer_of'}
 

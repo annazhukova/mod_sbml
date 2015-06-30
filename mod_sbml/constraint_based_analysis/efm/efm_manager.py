@@ -12,7 +12,7 @@ PRECISION = 6
 __author__ = 'anna'
 
 
-def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_2threshold=None, threshold=0.0,
+def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev=None, threshold=0.0,
                  r_ids=None, rewrite=True):
     """
     Computes elementary flux modes (EFMs) in a given SBML (see http://sbml.org) model,
@@ -25,10 +25,9 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     :param r_id:string, id of the reaction of interest.
     :param rev: boolean, if the reaction of interest should be considered in the opposite direction.
     :param em_number: int, number of EFMs to compute with TreeEFM software [Pey et al. 2014, PMID: 25380956].
-    :param r_id2rev_2threshold: set of strings in the form {(r_id_0, reversed_0), (r_id_1, reversed_1), ...},
-    if specified, only EFMs that contain all (if reaction_op == (REACTION_OPERATION_AND))
-    or any (if reaction_op == (REACTION_OPERATION_OR) of the reaction ids in specified directions
-    from this set will be returned.
+    :param r_id2rev: dictionary {r_id: reversed}, if specified,
+    only EFMs that contain all of the reaction ids in specified directions (or any direction if reversed is None)
+    from this dictionary will be returned.
     :return:efms: list of EFMs
 
     :raise ValueError: if the reaction of interest was not found in the model.
@@ -54,9 +53,9 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
         os.system("%s -b %s" % (tree_efm_path, efm_file))
         logging.info("elementary modes saved to %s" % efm_file_txt)
     # Filter EFMs so that only those that don't include the reaction in opposite directions are left.
-    # If r_id2rev are specified, filter EFMs to leave only those that include these reactions in these directions.
+    # If r_id2rev is specified, filter EFMs to leave only those that include these reactions in these directions.
     em_file_filtered = os.path.join(directory, "FV-EM_filtered.dat.txt")
-    efms, all_r_ids, rev_r_ids = filter_efms(efm_file_txt, r_id2i, rev_r_id2i, em_file_filtered, r_id2rev_2threshold,
+    efms, all_r_ids, rev_r_ids = filter_efms(efm_file_txt, r_id2i, rev_r_id2i, em_file_filtered, r_id2rev,
                                              zero_threshold=threshold, r_ids=r_ids)
     logging.info(
         "%d elementary modes corresponding to reactions of interest saved to %s" % (len(efms), em_file_filtered))
@@ -64,7 +63,7 @@ def compute_efms(sbml, directory, em_number, r_id, rev, tree_efm_path, r_id2rev_
     return efms, all_r_ids, rev_r_ids
 
 
-def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero_threshold=0.0,
+def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev=None, zero_threshold=0.0,
                 r_ids=None):
     i2r_id = {i: (r_id, False) for (r_id, i) in r_id2i.iteritems()}
     i2r_id.update({i: (r_id, True) for (r_id, i) in rev_r_id2i.iteritems()})
@@ -101,13 +100,9 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev_2threshold, zero
                     rejected_bad += 1
                     continue
 
-                if r_id2rev_2threshold:
-                    for (r_id2rev, present_reaction_threshold) in r_id2rev_2threshold:
-                        present_r_ids = set()
-                        for (r_id, rev) in r_id2rev.iteritems():
-                            if r_id in r_id2coefficient and (rev is None or rev == (r_id2coefficient[r_id] < 0)):
-                                present_r_ids.add(r_id)
-                        if len(present_r_ids) * 1.0 / len(r_id2rev) < present_reaction_threshold:
+                if r_id2rev:
+                    for (r_id, rev) in r_id2rev.iteritems():
+                        if r_id not in r_id2coefficient or (rev is not None and rev != (r_id2coefficient[r_id] < 0)):
                             rejected_different += 1
                             bad_em = True
                             break

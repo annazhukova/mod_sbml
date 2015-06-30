@@ -79,9 +79,10 @@ def process_clusters(dest_path, efm_id2efm, similarity_threshold, min_pattern_si
                         pattern = set(efm_r_ids)
                     else:
                         pattern &= set(efm_r_ids)
-            id2pattern[pattern_id] = pattern
-            p_id2efm_ids[pattern_id] = efm_ids
-            found_efm_ids |= efm_ids
+            if pattern:
+                id2pattern[pattern_id] = pattern
+                p_id2efm_ids[pattern_id] = efm_ids
+                found_efm_ids |= efm_ids
     logging.info('Processed ACoM classes.')
 
     outlier_efm_ids = set(efm_id2efm.iterkeys()) - found_efm_ids

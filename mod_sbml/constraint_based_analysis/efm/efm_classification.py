@@ -71,14 +71,22 @@ def classify_efms(id2efm, min_pattern_len, max_pattern_num=None):
     while patterns:
         logging.info("Calculating subpatterns contained in at least %d EFMs..." % level)
         new_patterns = set()
+        old_patterns = set()
         for pattern in patterns:
             p_id = pattern2id[pattern]
-            pattern = set(pattern)
+            s_pattern = set(pattern)
             efm_ids = p_id2efm_ids[p_id]
-            for efm_id in binary_ids:
-                if efm_id not in efm_ids:
-                    process_pattern_intersection(id2binary_ems[efm_id], pattern, new_patterns, {efm_id} | efm_ids)
+            for efm_id in (efm_id for efm_id in binary_ids if efm_id not in efm_ids):
+                new_p_id = process_pattern_intersection(id2binary_ems[efm_id], s_pattern, new_patterns,
+                                                        {efm_id} | efm_ids)
+                # if we found a subpattern that is long enough and is common for more EFMs
+                if new_p_id and new_p_id != p_id:
+                    old_patterns.add(pattern)
         patterns = new_patterns
+        for p in old_patterns:
+            p_id = pattern2id[p]
+            del pattern2id[p]
+            del p_id2efm_ids[p_id]
         logging.info("... found %d patterns." % len(patterns))
         level += 1
     max_pattern_num = min(len(pattern2id), max_pattern_num if max_pattern_num else len(pattern2id))

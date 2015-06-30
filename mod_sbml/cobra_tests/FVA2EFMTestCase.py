@@ -52,12 +52,11 @@ class EFMTestCase(unittest.TestCase):
         Thus fva_reactions \subseteq important_reactions.
         """
         cobra_model = create_cobra_model_from_sbml_file(TEST_SBML)
-        r_id2bounds, _ = analyse_by_fva(cobra_model, bm_r_id='r3', directory=FVA_DIR, objective_sense='maximize')
+        r_id2bounds, _, _ = analyse_by_fva(cobra_model, bm_r_id='r3', directory=FVA_DIR, objective_sense='maximize')
 
         _, important_r_ids = \
-            perform_efma(target_r_id='r3', target_r_reversed=False, r_id2rev_2threshold=(), sbml=TEST_SBML,
-                         directory=EFM_DIR,
-                         acom_path=None, calculate_patterns=False,
-                         calculate_important_reactions=True, imp_rn_threshold=0, rewrite=True)
+            perform_efma(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={},
+                         acom_path=None, calculate_patterns=False, calculate_important_reactions=True,
+                         imp_rn_threshold=0, rewrite=True)
         for r_id in r_id2bounds.iterkeys():
             self.assertIn(r_id, important_r_ids, "%s was supposed to be important." % r_id)

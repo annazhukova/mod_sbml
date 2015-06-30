@@ -3,6 +3,7 @@ import os
 
 import libsbml
 import openpyxl
+from mod_sbml.utils.misc import invert_map
 
 from mod_sbml.constraint_based_analysis.efm.EFM import EFM
 from mod_sbml.sbml.sbml_manager import get_r_comps, get_kegg_r_id, reverse_reaction
@@ -21,7 +22,7 @@ SORT_BY_EFM_NUMBER = 0
 SORT_BY_WEIGHTED_PRODUCT_OF_EFM_NUMBER_AND_PATTERN_LENGTH = 2
 
 
-def get_pattern_sorter(id2pattern, p_id2efm_ids, min_pattern_len, min_efm_num, sort=SORT_BY_EFM_NUMBER):
+def get_pattern_sorter(id2pattern, p_id2efm_ids, sort=SORT_BY_EFM_NUMBER):
     if not id2pattern:
         return SIMPLE_PATTERN_SORTER
     if SORT_BY_PATTERN_LENGTH == sort:
@@ -30,7 +31,9 @@ def get_pattern_sorter(id2pattern, p_id2efm_ids, min_pattern_len, min_efm_num, s
         return lambda p_id: -len(p_id2efm_ids[p_id])
     elif SORT_BY_WEIGHTED_PRODUCT_OF_EFM_NUMBER_AND_PATTERN_LENGTH == sort:
         max_pattern_len = max(len(pattern) for pattern in id2pattern.itervalues())
+        min_pattern_len = min(len(pattern) for pattern in id2pattern.itervalues())
         max_efm_number = max(len(efm_ids) for efm_ids in p_id2efm_ids.itervalues())
+        min_efm_num = min(len(efm_ids) for efm_ids in p_id2efm_ids.itervalues())
         return lambda p_id: \
             -(1.0 * (len(id2pattern[p_id]) - min_pattern_len) / (max_pattern_len - min_pattern_len)
               if max_pattern_len != min_pattern_len else 1) * \
@@ -98,11 +101,12 @@ def read_efms(output_efm_file, r_ids, rev_r_ids):
     return id2efm
 
 
-def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, process_sbml=lambda sbml_file, path: True,
-             limit=None):
+def efm2sbml(id2efm, directory, sbml, process_sbml=lambda sbml_file, path: True,
+             limit=None, get_file_path=lambda f: f, all_efms_file=None):
     count = 0
-    for efm_id, efm in id2efm.iteritems():
-        suffix = get_name_suffix(efm_id)
+    doc = libsbml.SBMLReader().readSBML(sbml)
+    model = doc.getModel()
+    for efm_id, efm in sorted(id2efm.iteritems(), key=lambda (efm_id, efm): len(efm)):
         r_id2coeff = efm.to_r_id2coeff()
 
         def r_updater(r):
@@ -113,10 +117,59 @@ def efm2sbml(id2efm, get_name_suffix, name_prefix, directory, sbml, process_sbml
             else:
                 r.setName(('%g %s' % (coeff, r.id)) if coeff != 1 else ('%s' % r.id))
 
-        new_sbml = os.path.join(directory, '%s_%d_%s.xml' % (name_prefix, efm_id, suffix))
-        r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml,
-                   '%s_%d_%s' % (name_prefix, efm_id, suffix), r_updater)
-        process_sbml(new_sbml, '%s_%d_%s' % (name_prefix, efm_id, suffix))
+        efm_name = 'EFM_%d_of_len_%d' % (efm_id, len(efm))
+        new_sbml = os.path.join(directory, '%s.xml' % efm_name)
+        r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml, efm_name, r_updater)
+
+        efm_txt = os.path.join(directory, '%s.txt' % efm_name)
+        serialize_efm(efm_id, r_id2coeff, model, efm_txt)
+
+        efm_file_string = \
+            '<p>Detailed description of all <b>%d</b> found EFMs is <a href="%s" target="_blank">here</a>.</p>' \
+            % (len(id2efm), get_file_path(all_efms_file)) if all_efms_file else ''
+        description = \
+            '''<h3>Elementary Flux Mode Analysis (EFMA)</h3>
+               <p>EFM %d of length <b>%d</b>
+               (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>) is visualised below.</p>
+               %s
+            ''' % (efm_id, len(efm), get_file_path(efm_txt), get_file_path(new_sbml), efm_file_string)
+        process_sbml(new_sbml, efm_name, description)
+        count += 1
+        if limit and count >= limit:
+            break
+
+
+def pattern2sbml(id2pattern, id2efm_ids, directory, sbml, process_sbml=lambda sbml_file, path: True,
+                 limit=None, get_file_path=lambda f: f, all_patterns_file=None, total_efm_num=0):
+    count = 0
+    doc = libsbml.SBMLReader().readSBML(sbml)
+    model = doc.getModel()
+    for p_id, pattern in sorted(id2pattern.iteritems(), key=lambda (p_id, _): -len(id2efm_ids[p_id])):
+        r_id2coeff = pattern.to_r_id2coeff()
+
+        def r_updater(r):
+            coeff = r_id2coeff[r.id]
+            if coeff < 0:
+                reverse_reaction(r)
+                r.setName(('%g -%s' % (-coeff, r.id)) if coeff != -1 else ('-%s' % r.id))
+            else:
+                r.setName(('%g %s' % (coeff, r.id)) if coeff != 1 else ('%s' % r.id))
+
+        pattern_name = 'Pattern_%d_of_len_%d_of_%d_EFMs' % (p_id, len(pattern), len(id2efm_ids[p_id]))
+        new_sbml = os.path.join(directory, '%s.xml' % pattern_name)
+        r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml, pattern_name, r_updater)
+        pattern_txt = os.path.join(directory, '%s.txt' % pattern_name)
+        serialize_pattern(p_id, r_id2coeff, id2efm_ids[p_id], model, pattern_txt)
+        p_file_string = '<p>Detailed description of all found patterns is <a href="%s" target="_blank">here</a>.</p>' \
+                        % get_file_path(all_patterns_file) if all_patterns_file else ''
+        description = \
+            '''<h3>Elementary Flux Mode Analysis (EFMA): common patterns</h3>
+               <p>Pattern %d of length <b>%d</b> common to <b>%d</b> (out of <b>%d</b>) EFMs
+               (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>) is visualised below.</p>
+               %s
+            ''' % (p_id, len(pattern), len(id2efm_ids[p_id]), total_efm_num, get_file_path(pattern_txt),
+                   get_file_path(new_sbml), p_file_string)
+        process_sbml(new_sbml, pattern_name, description)
         count += 1
         if limit and count >= limit:
             break
@@ -166,8 +219,47 @@ def serialize_important_reactions(r_id2efm_ids, model, output_file, imp_rn_thres
     return important_r_ids
 
 
-def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, min_efm_num_per_pattern,
-                       sorter=SIMPLE_PATTERN_SORTER):
+def serialize_pattern(p_id, r_id2coeff, efm_ids, model, output_file):
+    """
+    Serializes a pattern to a file.
+
+    :param p_id: pattern id
+
+    :param r_id2coeff: pattern, represented as a dictionary {reaction id: coefficient}.
+
+    :param output_file: path to the file where the pattern should be saved
+
+    :param efm_ids: a collection of ids of EFMs that contain this pattern
+    """
+    with open(output_file, 'w+') as f:
+        f.write('Pattern %d of length %d common for %d following EFMs:\n%s\n------------------\n'
+                % (p_id, len(r_id2coeff), len(efm_ids), ', '.join((str(it) for it in efm_ids))))
+        coeff2r_id = invert_map(r_id2coeff)
+        for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
+            for r_id in sorted(r_ids):
+                f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False, id=True)))
+            f.write('\n')
+
+
+def serialize_efm(efm_id, r_id2coeff, model, output_file):
+    """
+    Serializes an EFM to a file.
+
+    :param efm_id: EFM id
+
+    :param r_id2coeff: EFM, represented as a dictionary {reaction id: coefficient}.
+
+    :param output_file: path to the file where the EFM should be saved
+    """
+    with open(output_file, 'w+') as f:
+        f.write('EFM %d of length %d\n------------------\n' % (efm_id, len(r_id2coeff)))
+        coeff2r_id = invert_map(r_id2coeff)
+        for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
+            for r_id in sorted(r_ids):
+                f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False, id=True)))
+            f.write('\n')
+
+def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, sorter=SIMPLE_PATTERN_SORTER):
     """
     Serializes patterns to a file, one pattern per line. Patterns are represented as ids of the active reactions
     (for the reversed reactions, the id is preceded by minus), e.g. -R1 R3 -R7 R11 R25.
@@ -191,7 +283,7 @@ def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, m
         f.write("\tEFMs:\t%s\n" % ', '.join(str(efm_id) for efm_id in p_id2efm_ids[p_id]))
 
     with open(output_file, 'w+') as f:
-        f.write('Found %d patterns of len >= %d with num of EFMs >= %d.\n'
-                % (len(id2pattern), min_pattern_len, min_efm_num_per_pattern))
+        f.write('Found %d patterns of len >= %d.\n'
+                % (len(id2pattern), min_pattern_len))
         for p_id in sorted(p_id2efm_ids.iterkeys(), key=sorter):
             log_pattern(p_id, f)

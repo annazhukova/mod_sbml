@@ -57,7 +57,7 @@ def process_args(argv):
     if not dat or (not efm and (not tree or (tree and not r_id))):
         raise Usage(help_message)
     model_dir = dirname(abspath(dat))
-    sbml = '%s/%s.xml' % (model_dir, os.path.splitext(basename(dat))[0])
+    sbml = os.path.join(model_dir, '%s.xml' % os.path.splitext(basename(dat))[0])
     return dat, r_id, sbml, model_dir, verbose, tree, efm
 
 def main(argv=None):
@@ -72,14 +72,22 @@ def main(argv=None):
     if verbose:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s')
 
-    r_rev_ids, r_irrev_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=False)
-    if efm_file:
-        efms = convert_metatool_output2efm(efm_file, r_rev_ids=r_rev_ids, r_irrev_ids=r_irrev_ids, r_id=r_id)
-    else:
-        efms = None
+    r_rev_ids, r_irrev_ids = convert_dat2sbml(dat, sbml, create_boundary_reaction=True,
+                                              c_id2c_name={'c': "Cytosol", 'm': "Mitochondrion"},
+                                              default_c_id='c',
+                                              abbr2name={'Pi': 'Phosphate'})
+    # if efm_file:
+    #     efms = convert_metatool_output2efm(efm_file, r_rev_ids=r_rev_ids, r_irrev_ids=r_irrev_ids, r_id=r_id)
+    # else:
+    #     efms = None
 
-    analyse_model(sbml, out_r_id=r_id, out_rev=False, in_r_id2rev_2threshold=(), res_dir=model_dir,
-                  efms=efms, imp_rn_threshold=0, min_acom_pattern_len=7, do_fva=False)
+    m_file_name = os.path.splitext(os.path.basename(sbml))[0]
+    analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_Gln2Ser"),
+                  in_r_id2rev={'r_GLNc_exchange': True}, min_acom_pattern_len=7)
+    analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_Glc2Ser"),
+                  in_r_id2rev={'r_GLUCc_exchange': True}, min_acom_pattern_len=7)
+    analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_GlnGlc2Ser"),
+                  in_r_id2rev={'r_GLUCc_exchange': True, 'r_GLNc_exchange': True}, min_acom_pattern_len=7)
 
 
 if __name__ == "__main__":
