@@ -8,7 +8,7 @@ from mod_sbml.gibbs.reaction_boundary_manager import get_bounds, set_bounds
 from mod_sbml.sbml.sbml_manager import get_products, get_reactants, reverse_reaction
 from sbml_vis.graph.graph_properties import ALL_COMPARTMENTS
 from mimoza.mimoza_path import JS_SCRIPTS, CSS_SCRIPTS, MIMOZA_FAVICON
-from sbml_vis.html.html_generator import create_multi_html
+from sbml_vis.html.html_t_generator import create_multi_html
 from mimoza_pipeline import process_sbml, get_lib
 
 from mod_sbml.constraint_based_analysis.cobra_constraint_based_analysis.fba_analyser import analyse_by_fba
@@ -170,5 +170,4 @@ def analyse_model(sbml, out_r_id, out_rev, res_dir, in_r_id2rev=None, threshold=
 
     if not model_data:
         description += '<p>No pathways found.</p>'
-    create_multi_html(model_data, title=title, description=description, directory=vis_dir, scripts=JS_SCRIPTS,
-                      css=CSS_SCRIPTS, fav=MIMOZA_FAVICON)
+    create_multi_html(model_data, title=title, description=description, directory=vis_dir)

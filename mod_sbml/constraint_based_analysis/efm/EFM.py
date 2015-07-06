@@ -62,12 +62,22 @@ class EFM(object):
     def __str__(self, binary=False):
         return self.to_string()
 
-    def to_string(self, binary=False):
+    def to_string(self, binary=False, subpattern=None):
         r_id2coefficient = self.to_r_id2coeff()
-        keys = sorted(r_id2coefficient.iterkeys())
+        subkeys = set()
+        if subpattern:
+            subkeys = set(r_id2coefficient.iterkeys()) & set(subpattern.to_r_id2coeff().iterkeys())
+        keys = sorted(set(r_id2coefficient.iterkeys()) - subkeys)
         if binary or not self.coefficients:
-            return '\t'.join('%s%s' % ('-' if r_id2coefficient[r_id] < 0 else '', r_id) for r_id in keys)
-        return '\t'.join('%g %s' % (r_id2coefficient[r_id], r_id) for r_id in keys)
+            result = ''
+            if subkeys:
+                result += '(%s)\t' % '\t'.join('%s%s' % ('-' if r_id2coefficient[r_id] < 0 else '', r_id)
+                                             for r_id in sorted(subkeys))
+            return result + '\t'.join('%s%s' % ('-' if r_id2coefficient[r_id] < 0 else '', r_id) for r_id in keys)
+        result = ''
+        if subkeys:
+            result += '(%s)\t' % '\t'.join('%g %s' % (r_id2coefficient[r_id], r_id) for r_id in sorted(subkeys))
+        return result + '\t'.join('%g %s' % (r_id2coefficient[r_id], r_id) for r_id in keys)
 
     def __from_r_id2coeff(self, r_id2coeff):
         """
@@ -161,7 +171,10 @@ class EFM(object):
     def intersection(self, other):
         if not other or not isinstance(other, EFM):
             raise AttributeError('Other should be of type EFM')
-        return EFM(binary_efm=tuple((p1 & p2 for (p1, p2) in zip(self.binary_efm, other.binary_efm))),
+        binary_efm = tuple((p1 & p2 for (p1, p2) in zip(self.binary_efm, other.binary_efm)))
+        if not self.coefficients and binary_efm == self.binary_efm:
+            return self
+        return EFM(binary_efm=binary_efm,
                    r_ids=self.r_ids, rev_r_ids=self.rev_r_ids, int_size=self.int_size)
 
     def __len__(self):
@@ -180,6 +193,7 @@ class EFM(object):
 
     def __hash__(self):
         return hash((self.binary_efm, self.coefficients))
+
 
 
 

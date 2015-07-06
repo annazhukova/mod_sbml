@@ -2,6 +2,7 @@ import logging
 import os
 
 import libsbml
+from mod_sbml.constraint_based_analysis.efm.pattern_detection import detect_patterns
 
 from mod_sbml.constraint_based_analysis.efm.acom_classification import acom_classification
 from mod_sbml.constraint_based_analysis.efm.control_effective_flux_calculator import classify_efm_by_efficiency
@@ -60,8 +61,16 @@ def perform_efma(target_r_id, target_r_reversed, sbml, directory, r_id2rev=None,
                      all_efms_file=output_efm_file, limit=3)
 
     important_r_ids = None
+    if imp_rn_threshold is None:
+        imp_rn_threshold = len(all_id2efm) / 3
+        if essential_rn_number:
+            at_least_num = min(int(essential_rn_number * 1.5), len(all_id2efm))
+            if at_least_num == len(all_id2efm):
+                at_least_num = min(max(len(all_id2efm) / 2, essential_rn_number + 2), len(all_id2efm) - 1)
+            imp_rn_threshold = max(2, at_least_num, imp_rn_threshold)
+
     if calculate_important_reactions:
-        important_r_ids = analyse_important_reactions(all_id2efm, directory, essential_rn_number, get_file_path,
+        important_r_ids = analyse_important_reactions(all_id2efm, directory, get_file_path,
                                                       imp_rn_threshold, model, output_efm_file,
                                                       process_sbml, sbml)
 
@@ -80,27 +89,30 @@ def perform_efma(target_r_id, target_r_reversed, sbml, directory, r_id2rev=None,
     if acom_path:
         analyse_acom(acom_path, avg_efm_len, directory, essential_rn_number, id2efm, min_acom_pattern_len, min_efm_len,
                      r_ids, similarity_threshold)
-
     if calculate_patterns:
         analyse_patterns(id2efm, avg_efm_len, convert_patterns2sbml, directory, essential_rn_number, get_file_path,
-                         max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml)
+                         max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml,
+                         min_efm_num=imp_rn_threshold)
 
     return id2efm, important_r_ids
 
 
 def analyse_patterns(id2efm, avg_efm_len, convert_patterns2sbml, directory, essential_rn_number, get_file_path,
-                     max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml):
+                     max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml, min_efm_num=None):
     if not min_pattern_len:
-        min_pattern_len = min(avg_efm_len / 4, min_efm_len)
+        min_pattern_len = min(avg_efm_len / 3, min_efm_len)
         if essential_rn_number:
-            min_pattern_len = max(essential_rn_number + 3, min_pattern_len)
+            min_pattern_len = min(max(essential_rn_number + 3, min_pattern_len), avg_efm_len)
     pattern_dir = os.path.join(directory, 'patterns')
     create_dirs(pattern_dir)
-    p_id2efm_ids, id2pattern = classify_efms(id2efm, min_pattern_len=min_pattern_len,
-                                             max_pattern_num=max_pattern_number)
+    # p_id2efm_ids, id2pattern, all_efm_intersection = classify_efms(id2efm, min_pattern_len=min_pattern_len,
+    #                                          max_pattern_num=max_pattern_number, min_efm_num=min_efm_num)
+    p_id2efm_ids, id2pattern, all_efm_intersection = detect_patterns(id2efm, min_pattern_len=min_pattern_len,
+                                                                     efm_num=min_efm_num)
     sorter = get_pattern_sorter(id2pattern, p_id2efm_ids)
     patterns_txt = os.path.join(pattern_dir, 'patterns.txt')
-    serialize_patterns(p_id2efm_ids, id2pattern, patterns_txt, min_pattern_len, sorter=sorter)
+    serialize_patterns(p_id2efm_ids, id2pattern, patterns_txt, min_pattern_len, all_efm_intersection,
+                       min_efm_num=min_efm_num, sorter=sorter)
     if convert_patterns2sbml:
         pattern_sbml_dir = os.path.join(pattern_dir, 'sbml')
         create_dirs(pattern_sbml_dir)
@@ -131,15 +143,8 @@ def analyse_effective_efms(all_id2efm, directory, target_r_id):
     return efficient_efm_ids
 
 
-def analyse_important_reactions(all_id2efm, directory, essential_rn_number, get_file_path, imp_rn_threshold,
+def analyse_important_reactions(all_id2efm, directory, get_file_path, imp_rn_threshold,
                                 model, output_efm_file, process_sbml, sbml):
-    if imp_rn_threshold is None:
-        imp_rn_threshold = len(all_id2efm) / 3
-        if essential_rn_number:
-            at_least_num = min(int(essential_rn_number * 1.5), len(all_id2efm))
-            if at_least_num == len(all_id2efm):
-                at_least_num = min(max(len(all_id2efm) / 2, essential_rn_number + 2), len(all_id2efm) - 1)
-            imp_rn_threshold = max(at_least_num, imp_rn_threshold)
     rn_dir = os.path.join(directory, 'important')
     create_dirs(rn_dir)
     r_id2efm_ids = classify_reactions_by_efm(all_id2efm)

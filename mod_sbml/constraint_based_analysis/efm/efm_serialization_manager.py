@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import os
 
@@ -69,18 +70,18 @@ def serialize_efms_xslx(sbml, id2efm, path, r_id2style=basic_r_style):
 
 def serialize_efms_txt(id2efm, path):
     with open(path, 'w+') as f:
-        f.write('Found %d EFMs:\n' % len(id2efm))
+        f.write('Found %d EFMs:\n--------------\n\n' % len(id2efm))
         for efm_id in sorted(id2efm.iterkeys()):
             efm = id2efm[efm_id]
-            f.write('%d\t%s\n' % (efm_id, efm))
+            f.write('EFM %d\t%s\n\n' % (efm_id, efm))
 
 
 def serialize_n_most_effective_efms_txt(id2efm, id2efficiency, n, path):
     with open(path, 'w+') as f:
-        f.write('%d most effective EFMs:\n' % n)
+        f.write('%d most effective EFMs:\n-----------------\n\n' % n)
         for efm_id, efficiency in sorted(id2efficiency.iteritems(), key=lambda (_, eff): -eff)[0:n]:
             efm = id2efm[efm_id]
-            f.write('Efficiency=%g\tid=%d\t%s\n' % (efficiency, efm_id, efm))
+            f.write('EFM %d\tefficiency=%g\t%s\n\n' % (efm_id, efficiency, efm))
 
 
 def read_efms(output_efm_file, r_ids, rev_r_ids):
@@ -160,11 +161,11 @@ def pattern2sbml(id2pattern, id2efm_ids, directory, sbml, process_sbml=lambda sb
         r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml, pattern_name, r_updater)
         pattern_txt = os.path.join(directory, '%s.txt' % pattern_name)
         serialize_pattern(p_id, r_id2coeff, id2efm_ids[p_id], model, pattern_txt)
-        p_file_string = '<p>Detailed description of all found patterns is <a href="%s" target="_blank">here</a>.</p>' \
-                        % get_file_path(all_patterns_file) if all_patterns_file else ''
+        p_file_string = '<p>Detailed description of all <b>%d</b> found patterns is <a href="%s" target="_blank">here</a>.</p>' \
+                        % (len(id2pattern), get_file_path(all_patterns_file)) if all_patterns_file else ''
         description = \
             '''<h3>Elementary Flux Mode Analysis (EFMA): common patterns</h3>
-               <p>Pattern %d of length <b>%d</b> common to <b>%d</b> (out of <b>%d</b>) EFMs
+               <p>Pattern %d of length <b>%d</b> found in <b>%d</b> (out of <b>%d</b>) EFMs
                (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>) is visualised below.</p>
                %s
             ''' % (p_id, len(pattern), len(id2efm_ids[p_id]), total_efm_num, get_file_path(pattern_txt),
@@ -210,12 +211,19 @@ def serialize_acom_patterns(clusters, output_file, sbml, r_id2style=basic_r_styl
 
 def serialize_important_reactions(r_id2efm_ids, model, output_file, imp_rn_threshold=0):
     important_r_ids = {r_id[1:] if '-' == r_id[0] else r_id for r_id in r_id2efm_ids.iterkeys()}
+
+    len2r_ids = defaultdict(list)
+    for r_id, efm_ids in r_id2efm_ids.iteritems():
+        len2r_ids[len(efm_ids)].append(r_id)
+
     with open(output_file, 'w+') as f:
-        f.write('Found %d reactions (including %d unique) that participate in more than %d EFMs\n'
+        f.write('Found %d reactions (%d unique) that participate in at least %d EFMs\n-----------------------------\n\n'
                 % (len(r_id2efm_ids), len(important_r_ids), imp_rn_threshold))
-        for r_id, efm_ids in sorted(r_id2efm_ids.iteritems(), key=lambda (_, efm_ids): -len(efm_ids)):
-            f.write('(%d)\t%s\t%s\n' % (len(efm_ids), r_id,
-                                    get_sbml_r_formula(model, model.getReaction(r_id[1:] if '-' == r_id[0] else r_id))))
+        for num, r_ids in sorted(len2r_ids.iteritems(), key=lambda (n, _): -n):
+            for r_id in sorted(r_ids):
+                f.write('in %d EFMs\t%s:%s\n' %
+                        (num, r_id, get_sbml_r_formula(model, model.getReaction(r_id[1:] if '-' == r_id[0] else r_id))))
+            f.write('\n')
     return important_r_ids
 
 
@@ -232,7 +240,7 @@ def serialize_pattern(p_id, r_id2coeff, efm_ids, model, output_file):
     :param efm_ids: a collection of ids of EFMs that contain this pattern
     """
     with open(output_file, 'w+') as f:
-        f.write('Pattern %d of length %d common for %d following EFMs:\n%s\n------------------\n'
+        f.write('Pattern %d of length %d found in %d EFMs:\n\t%s\n------------------\n\n'
                 % (p_id, len(r_id2coeff), len(efm_ids), ', '.join((str(it) for it in efm_ids))))
         coeff2r_id = invert_map(r_id2coeff)
         for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
@@ -252,14 +260,15 @@ def serialize_efm(efm_id, r_id2coeff, model, output_file):
     :param output_file: path to the file where the EFM should be saved
     """
     with open(output_file, 'w+') as f:
-        f.write('EFM %d of length %d\n------------------\n' % (efm_id, len(r_id2coeff)))
+        f.write('EFM %d of length %d\n------------------\n\n' % (efm_id, len(r_id2coeff)))
         coeff2r_id = invert_map(r_id2coeff)
         for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
             for r_id in sorted(r_ids):
                 f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False, id=True)))
             f.write('\n')
 
-def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, sorter=SIMPLE_PATTERN_SORTER):
+def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, all_efm_intersection=None,
+                       min_efm_num=2, sorter=SIMPLE_PATTERN_SORTER):
     """
     Serializes patterns to a file, one pattern per line. Patterns are represented as ids of the active reactions
     (for the reversed reactions, the id is preceded by minus), e.g. -R1 R3 -R7 R11 R25.
@@ -278,12 +287,18 @@ def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, s
         pattern = id2pattern[p_id]
         p_length = len(pattern)
         efm_len = len(p_id2efm_ids[p_id])
-        p_string = pattern.to_string(binary=True)
-        f.write("id:%d\t(len=%d, num of EFMs=%d)\t%s\n" % (p_id, p_length, efm_len, p_string))
-        f.write("\tEFMs:\t%s\n" % ', '.join(str(efm_id) for efm_id in p_id2efm_ids[p_id]))
+        p_string = pattern.to_string(binary=True, subpattern=all_efm_intersection)
+        f.write("Pattern %d of length %d:\n\t%s,\nfound in %d EFMs:\n\t%s\n\n"
+                % (p_id, p_length, p_string, efm_len, ', '.join(str(efm_id) for efm_id in p_id2efm_ids[p_id])))
 
     with open(output_file, 'w+') as f:
-        f.write('Found %d patterns of len >= %d.\n'
-                % (len(id2pattern), min_pattern_len))
+        f.write(('Found %d patterns of length >= %d, contained in at least %d EFMs.\n'
+                 % (len(id2pattern), min_pattern_len, min_efm_num)) +
+                '--------------------------------------------------------------\n\n')
+        if all_efm_intersection and len(all_efm_intersection):
+            f.write(('Intersection of all EFMs has length %d: %s.\n'
+                     % (len(all_efm_intersection), all_efm_intersection.to_string(binary=True))) +
+                    '--------------------------------------------------------------\n\n')
+
         for p_id in sorted(p_id2efm_ids.iterkeys(), key=sorter):
             log_pattern(p_id, f)

@@ -1,12 +1,10 @@
 from collections import defaultdict
 import logging
 
-from mod_sbml.constraint_based_analysis.efm.EFM import get_binary_efm_len, EFM
-
 __author__ = 'anna'
 
 
-def classify_efms(id2efm, min_pattern_len, max_pattern_num=None):
+def classify_efms(id2efm, min_pattern_len, min_efm_num=2, max_pattern_num=None):
     """
     Classifies EFMs to find common patterns.
 
@@ -24,6 +22,9 @@ def classify_efms(id2efm, min_pattern_len, max_pattern_num=None):
 
     :param min_pattern_len: int, minimal length for a pattern to be considered.
 
+    :param min_efm_num: int, (optional) at least how many EFMs should include a pattern for it to be considered.
+    (The default value is 2.)
+
     :param max_pattern_num: int, (optional) at most how many patterns should be returned.
     If not set, all the patterns will be returned.
 
@@ -40,64 +41,48 @@ def classify_efms(id2efm, min_pattern_len, max_pattern_num=None):
     a pattern: r1, r2, r3, r5 would be represented as [77], as the binary representation of 77 is '1001101'
     that corresponds to '1 r5, 0 r4, 0 -r3, 1 r3, 1 -r2, 0 r2, 1 r1', where -ri is the reversed version of ri.
     """
-    id2binary_ems = {efm_id: efm.binary_efm for (efm_id, efm) in id2efm.iteritems()}
-    binary_ids = sorted(id2binary_ems.iterkeys())
-    logging.info("EFMs converted to %d binary vectors" % len(id2binary_ems))
-    pattern2id = {}
-    p_id2efm_ids = defaultdict(set)
-    patterns = set()
 
-    def process_pattern_intersection(pattern1, pattern2, new_patterns, efm_ids):
-        pattern = tuple([p1 & p2 for (p1, p2) in zip(pattern1, pattern2)])
-        if get_binary_efm_len(pattern) >= min_pattern_len:
-            if pattern not in pattern2id:
-                new_patterns.add(pattern)
-                pattern2id[pattern] = len(pattern2id)
-            p_id = pattern2id[pattern]
-            p_id2efm_ids[p_id] |= efm_ids
-            return p_id
+    pattern2efm_ids = defaultdict(set)
+    pattern2efm_ids.update({efm: {efm_id} for (efm_id, efm) in id2efm.iteritems()})
+
+    def process_pattern_intersection(pattern1, pattern2, detected_patterns):
+        intersection = pattern1.intersection(pattern2)
+        if len(intersection) >= min_pattern_len:
+            if intersection not in pattern2efm_ids:
+                detected_patterns.add(intersection)
+            pattern2efm_ids[intersection] |= pattern2efm_ids[pattern1] | pattern2efm_ids[pattern2]
+            return intersection
         return None
 
-    logging.info("Calculating patterns contained in at least 2 EFMs...")
-    i = 0
-    for efm_id1 in binary_ids:
-        efm1 = id2binary_ems[efm_id1]
-        for efm_id2 in binary_ids[i + 1:]:
-            efm2 = id2binary_ems[efm_id2]
-            process_pattern_intersection(efm1, efm2, patterns, {efm_id1, efm_id2})
-        i += 1
-    logging.info("... found %d patterns." % len(patterns))
-    level = 3
+    efm_ids = set(id2efm.iterkeys())
+    patterns = set(pattern2efm_ids.iterkeys())
+
+    level = 2
     while patterns:
-        logging.info("Calculating subpatterns contained in at least %d EFMs..." % level)
+        logging.info("Calculating patterns contained in at least %d EFMs..." % level)
         new_patterns = set()
-        old_patterns = set()
+        patterns_to_remove = set()
         for pattern in patterns:
-            p_id = pattern2id[pattern]
-            s_pattern = set(pattern)
-            efm_ids = p_id2efm_ids[p_id]
-            for efm_id in (efm_id for efm_id in binary_ids if efm_id not in efm_ids):
-                new_p_id = process_pattern_intersection(id2binary_ems[efm_id], s_pattern, new_patterns,
-                                                        {efm_id} | efm_ids)
+            p_efm_ids = pattern2efm_ids[pattern]
+            for efm_id in efm_ids - p_efm_ids:
+                efm = id2efm[efm_id]
+                new_pattern = process_pattern_intersection(pattern, efm, new_patterns)
                 # if we found a subpattern that is long enough and is common for more EFMs
-                if new_p_id and new_p_id != p_id:
-                    old_patterns.add(pattern)
+                if new_pattern and new_pattern != pattern:
+                    patterns_to_remove.add(pattern)
         patterns = new_patterns
-        for p in old_patterns:
-            p_id = pattern2id[p]
-            del pattern2id[p]
-            del p_id2efm_ids[p_id]
+        for p in patterns_to_remove:
+            del pattern2efm_ids[p]
         logging.info("... found %d patterns." % len(patterns))
         level += 1
-    max_pattern_num = min(len(pattern2id), max_pattern_num if max_pattern_num else len(pattern2id))
-    p_ids = sorted(pattern2id.itervalues(), key=lambda p_id: -len(p_id2efm_ids[p_id]))[0:max_pattern_num]
-    id2pattern = {p_id: p for (p, p_id) in pattern2id.iteritems() if p_id in p_ids}
-    id2id = dict(zip(id2pattern.iterkeys(), xrange(1, len(id2pattern) + 1)))
-    sample_efm = next(id2efm.itervalues())
-    id2pattern = {id2id[p_id]: EFM(r_ids=sample_efm.r_ids, rev_r_ids=sample_efm.rev_r_ids, int_size=sample_efm.int_size,
-                                   binary_efm=p) for (p_id, p) in id2pattern.iteritems()}
-    p_id2efm_ids = {id2id[p_id]: efm_ids for (p_id, efm_ids) in p_id2efm_ids.iteritems() if p_id in id2id}
-    return p_id2efm_ids, id2pattern
+    max_pattern_num = min(len(pattern2efm_ids), max_pattern_num if max_pattern_num else len(pattern2efm_ids))
+    patterns = sorted((p for p in pattern2efm_ids.iterkeys() if len(pattern2efm_ids[p]) >= min_efm_num),
+                      key=lambda p: -len(pattern2efm_ids[p]))[0: max_pattern_num]
+    id2pattern = dict(zip(xrange(1, len(patterns) + 1), patterns))
+    p_id2efm_ids = {p_id: pattern2efm_ids[p] for (p_id, p) in id2pattern.iteritems()}
+
+    all_efm_intersection = reduce(lambda p1, p2: p1.intersection(p2), id2efm.itervalues(), next(id2efm.itervalues()))
+    return p_id2efm_ids, id2pattern, all_efm_intersection
 
 
 
