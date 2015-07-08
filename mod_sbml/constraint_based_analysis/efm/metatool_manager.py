@@ -144,10 +144,12 @@ def convert_dat2sbml(in_dat, out_sbml, create_boundary_reaction=True, c_id2c_nam
     """
     logging.info("Converting %s to SBML..." % in_dat)
     file_name, _ = os.path.splitext(os.path.basename(in_dat))
-    file_name = normalize_id(file_name, 'M_') if file_name else 'Model'
+    m_name = file_name if file_name else 'Model'
+    m_id = normalize_id(m_name, 'M_')
     document = libsbml.SBMLDocument(2, 4)
     model = document.createModel()
-    model.setId(file_name)
+    model.setId(m_id)
+    model.setName(m_name)
     if not c_id2c_name:
         if default_c_id:
             c_id2c_name = {default_c_id: default_c_id}
