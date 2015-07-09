@@ -73,7 +73,7 @@ def serialize_efms_txt(id2efm, path):
         f.write('Found %d EFMs:\n--------------\n\n' % len(id2efm))
         for efm_id in sorted(id2efm.iterkeys()):
             efm = id2efm[efm_id]
-            f.write('EFM %d\t%s\n\n' % (efm_id, efm))
+            f.write('EFM %d of length %d:\n\t%s\n\n' % (efm_id, len(efm), efm))
 
 
 def serialize_n_most_effective_efms_txt(id2efm, id2efficiency, n, path):
@@ -81,7 +81,7 @@ def serialize_n_most_effective_efms_txt(id2efm, id2efficiency, n, path):
         f.write('%d most effective EFMs:\n-----------------\n\n' % n)
         for efm_id, efficiency in sorted(id2efficiency.iteritems(), key=lambda (_, eff): -eff)[0:n]:
             efm = id2efm[efm_id]
-            f.write('EFM %d\tefficiency=%g\t%s\n\n' % (efm_id, efficiency, efm))
+            f.write('EFM %d,\tefficiency=%g:\t%s\n\n' % (efm_id, efficiency, efm))
 
 
 def read_efms(output_efm_file, r_ids, rev_r_ids):
@@ -176,6 +176,41 @@ def pattern2sbml(id2pattern, id2efm_ids, directory, sbml, process_sbml=lambda sb
             break
 
 
+def clique2sbml(id2clique, directory, sbml, process_sbml=lambda sbml_file, path: True,
+                limit=None, get_file_path=lambda f: f, all_cliques_file=None):
+    count = 0
+    doc = libsbml.SBMLReader().readSBML(sbml)
+    model = doc.getModel()
+    for cl_id, clique in sorted(id2clique.iteritems(), key=lambda (_, cl): -len(cl)):
+        r_id2coeff = clique.to_r_id2coeff()
+
+        def r_updater(r):
+            coeff = r_id2coeff[r.id]
+            if coeff < 0:
+                reverse_reaction(r)
+                r.setName(('%g -%s' % (-coeff, r.id)) if coeff != -1 else ('-%s' % r.id))
+            else:
+                r.setName(('%g %s' % (coeff, r.id)) if coeff != 1 else ('%s' % r.id))
+
+        clique_name = 'Clique_%d_of_len_%d' % (cl_id, len(clique))
+        new_sbml = os.path.join(directory, '%s.xml' % clique_name)
+        r_ids2sbml(r_id2coeff.keys(), sbml, new_sbml, clique_name, r_updater)
+        clique_txt = os.path.join(directory, '%s.txt' % clique_name)
+        serialize_clique(cl_id, r_id2coeff, model, clique_txt)
+        cl_file_string = '<p>Detailed description of all <b>%d</b> found cliques is <a href="%s" target="_blank">here</a>.</p>' \
+                        % (len(id2clique), get_file_path(all_cliques_file)) if all_cliques_file else ''
+        description = \
+            '''<h3>Elementary Flux Mode Analysis (EFMA): reaction cliques</h3>
+               <p>Clique %d of length <b>%d</b>
+               (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>) is visualised below.</p>
+               %s
+            ''' % (cl_id, len(clique), get_file_path(clique_txt), get_file_path(new_sbml), cl_file_string)
+        process_sbml(new_sbml, clique_name, description)
+        count += 1
+        if limit and count >= limit:
+            break
+
+
 def r_ids2sbml(r_ids, sbml, out_sbml, suffix='', r_updater=lambda r: True):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
@@ -217,8 +252,8 @@ def serialize_important_reactions(r_id2efm_ids, model, output_file, imp_rn_thres
         len2r_ids[len(efm_ids)].append(r_id)
 
     with open(output_file, 'w+') as f:
-        f.write('Found %d reactions (%d unique) that participate in at least %d EFMs\n-----------------------------\n\n'
-                % (len(r_id2efm_ids), len(important_r_ids), imp_rn_threshold))
+        f.write('Found %d reactions that participate in at least %d EFMs\n-----------------------------\n\n'
+                % (len(r_id2efm_ids), imp_rn_threshold))
         for num, r_ids in sorted(len2r_ids.iteritems(), key=lambda (n, _): -n):
             for r_id in sorted(r_ids):
                 f.write('in %d EFMs\t%s:%s\n' %
@@ -245,7 +280,28 @@ def serialize_pattern(p_id, r_id2coeff, efm_ids, model, output_file):
         coeff2r_id = invert_map(r_id2coeff)
         for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
             for r_id in sorted(r_ids):
-                f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False, id=True)))
+                f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False,
+                                                                           id=True)))
+            f.write('\n')
+
+
+def serialize_clique(cl_id, r_id2coeff, model, output_file):
+    """
+    Serializes a clique to a file.
+
+    :param cl_id: clique id
+
+    :param r_id2coeff: clique, represented as a dictionary {reaction id: coefficient}.
+
+    :param output_file: path to the file where the clique should be saved
+    """
+    with open(output_file, 'w+') as f:
+        f.write('Clique %d of length %d\n------------------\n\n' % (cl_id, len(r_id2coeff)))
+        coeff2r_id = invert_map(r_id2coeff)
+        for coeff, r_ids in sorted(coeff2r_id.iteritems(), key=lambda (coeff, _): (-abs(coeff), -coeff)):
+            for r_id in sorted(r_ids):
+                f.write('%g\t%s:\t%s\n' % (coeff, r_id, get_sbml_r_formula(model, model.getReaction(r_id), comp=False,
+                                                                           id=True)))
             f.write('\n')
 
 
@@ -302,3 +358,34 @@ def serialize_patterns(p_id2efm_ids, id2pattern, output_file, min_pattern_len, a
 
         for p_id in sorted(p_id2efm_ids.iterkeys(), key=sorter):
             log_pattern(p_id, f)
+
+
+def serialize_cliques(id2clique, output_file, min_clique_len, all_efm_intersection=None,
+                       min_efm_num=2):
+    """
+    Serializes cliques to a file, one clique per line. Cliques are represented as ids of the active reactions
+    (for the reversed reactions, the id is preceded by minus), e.g. -R1 R3 -R7 R11 R25.
+    Cliques are sorted according to the sorter function.
+
+    :param id2clique: dict, {clique id: clique}.
+
+    :param output_file: path to the file where the cliques should be saved
+    """
+
+    def log_clique(cl_id, f):
+        clique = id2clique[cl_id]
+        cl_length = len(clique)
+        cl_string = clique.to_string(binary=True, subpattern=all_efm_intersection)
+        f.write("Clique %d of length %d:\n\t%s\n\n" % (cl_id, cl_length, cl_string))
+
+    with open(output_file, 'w+') as f:
+        f.write(('Found %d cliques of length >= %d (used %d as the min number of common EFMs for related reactions).\n'
+                 % (len(id2clique), min_clique_len, min_efm_num)) +
+                '--------------------------------------------------------------\n\n')
+        if all_efm_intersection and len(all_efm_intersection):
+            f.write(('Intersection of all EFMs has length %d: %s.\n'
+                     % (len(all_efm_intersection), all_efm_intersection.to_string(binary=True))) +
+                    '--------------------------------------------------------------\n\n')
+
+        for cl_id in sorted(id2clique.iterkeys()):
+            log_clique(cl_id, f)

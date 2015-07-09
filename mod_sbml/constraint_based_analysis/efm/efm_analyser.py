@@ -2,7 +2,7 @@ import logging
 import os
 
 import libsbml
-from mod_sbml.constraint_based_analysis.efm.pattern_detection import detect_patterns
+from mod_sbml.constraint_based_analysis.efm.clique_detection import detect_cliques
 
 from mod_sbml.constraint_based_analysis.efm.acom_classification import acom_classification
 from mod_sbml.constraint_based_analysis.efm.control_effective_flux_calculator import classify_efm_by_efficiency
@@ -10,7 +10,7 @@ from mod_sbml.constraint_based_analysis.efm.efm_classification import classify_e
 from mod_sbml.constraint_based_analysis.efm.efm_manager import compute_efms
 from mod_sbml.constraint_based_analysis.efm.efm_serialization_manager import efm2sbml, serialize_efms_txt, \
     serialize_important_reactions, r_ids2sbml, get_pattern_sorter, serialize_patterns, read_efms, \
-    serialize_n_most_effective_efms_txt, pattern2sbml
+    serialize_n_most_effective_efms_txt, pattern2sbml, serialize_cliques, clique2sbml
 from mod_sbml.constraint_based_analysis.efm.reaction_classification_by_efm import classify_reactions_by_efm
 from mod_sbml.gibbs.reaction_boundary_manager import get_reversible
 from mod_sbml.sbml.sbml_manager import reverse_reaction
@@ -27,7 +27,8 @@ def perform_efma(target_r_id, target_r_reversed, sbml, directory, r_id2rev=None,
                  acom_path='/home/anna/Applications/acom-c/acom-c', min_acom_pattern_len=0, similarity_threshold=0,
                  calculate_patterns=True, min_pattern_len=0, max_pattern_number=10, convert_patterns2sbml=True,
                  calculate_important_reactions=True, imp_rn_threshold=None, rewrite=True,
-                 process_sbml=lambda sbml_file, path, header: True, get_file_path=lambda f: f, essential_rn_number=0):
+                 process_sbml=lambda sbml_file, path, header: True, get_file_path=lambda f: f, essential_rn_number=0,
+                 calculate_cliques=True, convert_clique2sbml=True):
     doc = libsbml.SBMLReader().readSBML(sbml)
     model = doc.getModel()
     if not r_ids:
@@ -62,9 +63,9 @@ def perform_efma(target_r_id, target_r_reversed, sbml, directory, r_id2rev=None,
 
     important_r_ids = None
     if imp_rn_threshold is None:
-        imp_rn_threshold = len(all_id2efm) / 3
+        imp_rn_threshold = int(len(all_id2efm) * 0.3)
         if essential_rn_number:
-            at_least_num = min(int(essential_rn_number * 1.5), len(all_id2efm))
+            at_least_num = min(int(essential_rn_number * 1.25), len(all_id2efm))
             if at_least_num == len(all_id2efm):
                 at_least_num = min(max(len(all_id2efm) / 2, essential_rn_number + 2), len(all_id2efm) - 1)
             imp_rn_threshold = max(2, at_least_num, imp_rn_threshold)
@@ -94,21 +95,24 @@ def perform_efma(target_r_id, target_r_reversed, sbml, directory, r_id2rev=None,
                          max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml,
                          min_efm_num=imp_rn_threshold)
 
+    if calculate_cliques:
+        analyse_cliques(id2efm, avg_efm_len, convert_clique2sbml, directory, essential_rn_number, get_file_path,
+                        min_efm_len, min_clique_len=None, process_sbml=process_sbml, sbml=sbml,
+                        min_efm_num=imp_rn_threshold)
+
     return id2efm, important_r_ids
 
 
 def analyse_patterns(id2efm, avg_efm_len, convert_patterns2sbml, directory, essential_rn_number, get_file_path,
                      max_pattern_number, min_efm_len, min_pattern_len, process_sbml, sbml, min_efm_num=None):
     if not min_pattern_len:
-        min_pattern_len = min(avg_efm_len / 3, min_efm_len)
+        min_pattern_len = min(int(avg_efm_len * 0.3), min_efm_len)
         if essential_rn_number:
             min_pattern_len = min(max(essential_rn_number + 3, min_pattern_len), avg_efm_len)
     pattern_dir = os.path.join(directory, 'patterns')
     create_dirs(pattern_dir)
-    # p_id2efm_ids, id2pattern, all_efm_intersection = classify_efms(id2efm, min_pattern_len=min_pattern_len,
-    #                                          max_pattern_num=max_pattern_number, min_efm_num=min_efm_num)
-    p_id2efm_ids, id2pattern, all_efm_intersection = detect_patterns(id2efm, min_pattern_len=min_pattern_len,
-                                                                     efm_num=min_efm_num)
+    p_id2efm_ids, id2pattern, all_efm_intersection = classify_efms(id2efm, min_pattern_len=min_pattern_len,
+                                             max_pattern_num=max_pattern_number, min_efm_num=min_efm_num)
     sorter = get_pattern_sorter(id2pattern, p_id2efm_ids)
     patterns_txt = os.path.join(pattern_dir, 'patterns.txt')
     serialize_patterns(p_id2efm_ids, id2pattern, patterns_txt, min_pattern_len, all_efm_intersection,
@@ -118,6 +122,24 @@ def analyse_patterns(id2efm, avg_efm_len, convert_patterns2sbml, directory, esse
         create_dirs(pattern_sbml_dir)
         pattern2sbml(id2pattern, p_id2efm_ids, pattern_sbml_dir, sbml=sbml, process_sbml=process_sbml,
                      limit=3, get_file_path=get_file_path, all_patterns_file=patterns_txt, total_efm_num=len(id2efm))
+
+
+def analyse_cliques(id2efm, avg_efm_len, convert2sbml, directory, essential_rn_number, get_file_path,
+                    min_efm_len, min_clique_len, process_sbml, sbml, min_efm_num=None):
+    if not min_clique_len:
+        min_clique_len = min(avg_efm_len / 4, min_efm_len)
+        if essential_rn_number:
+            min_clique_len = min(max(essential_rn_number + 3, min_clique_len), avg_efm_len)
+    clique_dir = os.path.join(directory, 'cliques')
+    create_dirs(clique_dir)
+    id2clique, all_efm_intersection = detect_cliques(id2efm, min_clique_size=min_clique_len, efm_num=min_efm_num)
+    clique_txt = os.path.join(clique_dir, 'cliques.txt')
+    serialize_cliques(id2clique, clique_txt, min_clique_len, all_efm_intersection, min_efm_num=min_efm_num)
+    if convert2sbml:
+        sbml_dir = os.path.join(clique_dir, 'sbml')
+        create_dirs(sbml_dir)
+        clique2sbml(id2clique, sbml_dir, sbml=sbml, process_sbml=process_sbml, limit=3, get_file_path=get_file_path,
+                    all_cliques_file=clique_txt)
 
 
 def analyse_acom(acom_path, avg_efm_len, directory, essential_rn_number, id2efm, min_acom_pattern_len, min_efm_len,

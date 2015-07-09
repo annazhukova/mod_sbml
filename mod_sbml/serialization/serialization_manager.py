@@ -162,7 +162,7 @@ def get_stoichiometries(participants, metabolites, compartments):
 
 def get_sbml_r_formula(model, r, comp=True, id=True):
     format_m = lambda m_id, st: "%s%s" % (
-        "%4.2f " % st if st != 1 else "",
+        "%g " % st if st != 1 else "",
         format_m_name(model.getSpecies(m_id), model, comp, id))
     formula = " + ".join([format_m(m_id, st) for (m_id, st) in get_reactants(r, True)]) + \
               (" <=> " if r.getReversible() else "-->") + \
