@@ -83,12 +83,11 @@ def main(argv=None):
 
     m_file_name = os.path.splitext(os.path.basename(sbml))[0]
     analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_Gln2Ser"),
-                  in_r_id2rev={'r_GLNc_exchange': True}, min_acom_pattern_len=7, title='GLN->SER in RR9')
+                  in_r_id2rev={'r_GLNc_exchange': True}, title='GLN->SER in RR9')
     analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_Glc2Ser"),
-                  in_r_id2rev={'r_GLUCc_exchange': True}, min_acom_pattern_len=7, title='GLC->SER in RR9')
+                  in_r_id2rev={'r_GLUCc_exchange': True}, title='GLC->SER in RR9')
     analyse_model(sbml, out_r_id=r_id, out_rev=False, res_dir=os.path.join(model_dir, m_file_name + "_GlnGlc2Ser"),
-                  in_r_id2rev={'r_GLUCc_exchange': True, 'r_GLNc_exchange': True}, min_acom_pattern_len=7,
-                  title='GLN+GLC->SER in RR9')
+                  in_r_id2rev={'r_GLUCc_exchange': True, 'r_GLNc_exchange': True}, title='GLN+GLC->SER in RR9')
 
 
 if __name__ == "__main__":

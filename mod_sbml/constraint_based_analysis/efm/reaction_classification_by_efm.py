@@ -22,3 +22,10 @@ def classify_reactions_by_efm(id2efm):
             else:
                 r_id2efm_ids[r_id].add(efm_id)
     return r_id2efm_ids
+
+def get_important_reactions(id2efm, imp_rn_threshold):
+    r_id2efm_ids = classify_reactions_by_efm(id2efm)
+    r_id2efm_ids = {r_id: efm_ids for (r_id, efm_ids) in r_id2efm_ids.iteritems()
+                    if len(efm_ids) > imp_rn_threshold}
+    important_r_ids = {r_id[1:] if '-' == r_id[0] else r_id for r_id in r_id2efm_ids.iterkeys()}
+    return r_id2efm_ids, important_r_ids

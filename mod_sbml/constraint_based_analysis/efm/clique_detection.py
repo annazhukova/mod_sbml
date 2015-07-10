@@ -20,7 +20,7 @@ def detect_cliques(id2efm, min_clique_size, efm_num=2):
     :param efm_num: int (optional, default value is 2), minimal number of EFMs that should contain two reactions
     for them to be considered related.
 
-    :return: id2clique, all_efm_intersection
+    :return: id2clique
     """
     logging.info("Going to rank reactions by EFM number.")
     r_id_pair2count = Counter()
@@ -45,8 +45,7 @@ def detect_cliques(id2efm, min_clique_size, efm_num=2):
                     r_id2coeff=clique2r_id2coeff(clique)) for clique in
                 (clique for clique in find_cliques(gr) if len(clique) >= min_clique_size)]
     id2clique = dict(zip(xrange(1, len(cliques) + 1), cliques))
-    all_efm_intersection = reduce(lambda p1, p2: p1.intersection(p2), id2efm.itervalues(), next(id2efm.itervalues()))
-    return id2clique, all_efm_intersection
+    return id2clique
 
 
 

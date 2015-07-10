@@ -80,9 +80,7 @@ def classify_efms(id2efm, min_pattern_len, min_efm_num=2, max_pattern_num=None):
                       key=lambda p: -len(pattern2efm_ids[p]))[0: max_pattern_num]
     id2pattern = dict(zip(xrange(1, len(patterns) + 1), patterns))
     p_id2efm_ids = {p_id: pattern2efm_ids[p] for (p_id, p) in id2pattern.iteritems()}
-
-    all_efm_intersection = reduce(lambda p1, p2: p1.intersection(p2), id2efm.itervalues(), next(id2efm.itervalues()))
-    return p_id2efm_ids, id2pattern, all_efm_intersection
+    return p_id2efm_ids, id2pattern
 
 
 

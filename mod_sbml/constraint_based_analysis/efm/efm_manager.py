@@ -71,7 +71,7 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev=None, zero_thres
     rev_r_ids = set(rev_r_id2i.iterkeys())
     int_size = get_int_size()
     processed = set()
-    efms = []
+    efms = set()
     round_value = lambda v: round(float(v), PRECISION)
     rejected_bad, rejected_different = 0, 0
     with open(out_path, 'w+') as out_f:
@@ -116,7 +116,7 @@ def filter_efms(in_path, r_id2i, rev_r_id2i, out_path, r_id2rev=None, zero_thres
                 efm = EFM(r_id2coeff=r_id2coefficient, r_ids=all_r_ids, rev_r_ids=rev_r_ids, int_size=int_size)
 
                 if not r_ids or efm.binary_efm not in processed:
-                    efms.append(efm)
+                    efms.add(efm)
                     if r_ids:
                         processed.add(efm.binary_efm)
     if rejected_different:

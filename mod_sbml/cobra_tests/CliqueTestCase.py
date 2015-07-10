@@ -32,12 +32,13 @@ class CliqueTestCase(unittest.TestCase):
                        {'r00': 1, 'r1': 1, 'r4': 1, 'r5': 1}]
         id2efm = dict(zip(xrange(1, len(r_id2coeffs) + 1),
                           (EFM(r_ids=self.r_ids, rev_r_ids=self.rev_r_ids, r_id2coeff=it) for it in r_id2coeffs)))
-        p_id2efm_ids, id2clique, _ = detect_cliques(id2efm, 3, 2)
+        id2clique = detect_cliques(id2efm, 3, 2)
         # Expect to detect the following cliques:
         # {'r1': 1, 'r4': 1, 'r5': 1}
         # {'r1': 1, 'r4': 1, 'r00': 1}
         p_len = len(id2clique)
-        self.assertEqual(p_len, 2, "Expected to find 3 cliques, found %s" % [it.to_r_id2coeff() for it in id2clique.itervalues()])
+        self.assertEqual(p_len, 2, "Expected to find 3 cliques, found %s" %
+                         [it.to_r_id2coeff() for it in id2clique.itervalues()])
 
     def test_cliques(self):
         r_id2coeffs = [{'r0': 1, 'r1': 1, 'r2': 1, 'r3': 1},
@@ -47,7 +48,7 @@ class CliqueTestCase(unittest.TestCase):
                        {'r00': 1, 'r1': 1, 'r4': 1, 'r5': 1}]
         id2efm = dict(zip(xrange(1, len(r_id2coeffs) + 1),
                           (EFM(r_ids=self.r_ids, rev_r_ids=self.rev_r_ids, r_id2coeff=it) for it in r_id2coeffs)))
-        p_id2efm_ids, id2clique, _ = detect_cliques(id2efm, 3, 2)
+        id2clique = detect_cliques(id2efm, 3, 2)
         # Expect to detect the following cliques:
         # {'r1': 1, 'r4': 1, 'r5': 1}
         # {'r1': 1, 'r4': 1, 'r00': 1}

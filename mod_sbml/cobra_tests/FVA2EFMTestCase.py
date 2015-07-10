@@ -4,9 +4,10 @@ import shutil
 
 from cobra.io.sbml import create_cobra_model_from_sbml_file
 
+from mod_sbml.constraint_based_analysis.efm.reaction_classification_by_efm import get_important_reactions
 from mod_sbml.cobra_tests.SBMLTestCase import DATA_DIR, TEST_SBML, create_test_sbml
 from mod_sbml.constraint_based_analysis.cobra_constraint_based_analysis.fva_analyser import analyse_by_fva
-from mod_sbml.constraint_based_analysis.efm.efm_analyser import perform_efma
+from mod_sbml.constraint_based_analysis.efm.efm_analyser import get_efms
 from mod_sbml.utils.path_manager import create_dirs
 
 __author__ = 'anna'
@@ -52,11 +53,10 @@ class EFMTestCase(unittest.TestCase):
         Thus fva_reactions \subseteq important_reactions.
         """
         cobra_model = create_cobra_model_from_sbml_file(TEST_SBML)
-        r_id2bounds, _, _ = analyse_by_fva(cobra_model, bm_r_id='r3', directory=FVA_DIR, objective_sense='maximize')
+        r_id2bounds, _ = analyse_by_fva(cobra_model, bm_r_id='r3', objective_sense='maximize')
 
-        _, important_r_ids = \
-            perform_efma(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={},
-                         acom_path=None, calculate_patterns=False, calculate_important_reactions=True,
-                         imp_rn_threshold=0, rewrite=True)
+        id2efm = get_efms(target_r_id='r3', target_r_reversed=False, sbml=TEST_SBML, directory=EFM_DIR, r_id2rev={})
+        _, important_r_ids = get_important_reactions(id2efm, imp_rn_threshold=0)
+
         for r_id in r_id2bounds.iterkeys():
             self.assertIn(r_id, important_r_ids, "%s was supposed to be important." % r_id)
