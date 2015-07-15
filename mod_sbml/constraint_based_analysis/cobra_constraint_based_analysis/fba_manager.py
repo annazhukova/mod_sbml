@@ -25,7 +25,11 @@ def set_bounds(reaction, value, max_up_b, max_l_b):
 def optimise_biomass(model, bm_id, objective_sense='maximize', level=logging.INFO):
     reaction = model.reactions.get_by_id(bm_id)
     model.change_objective([reaction])
-    optimize_minimal_flux(model, objective_sense=objective_sense)
+    try:
+        optimize_minimal_flux(model, objective_sense=objective_sense)
+    except Exception as e:
+        logging.error("Could not optimise the model %s: %s" % (model.id, e.message))
+        return None
     if "optimal" != model.solution.status:
         logging.error("A problem occurred while calculating the solution for %s: %s"
                       % (format_r_name(reaction), model.solution.status))

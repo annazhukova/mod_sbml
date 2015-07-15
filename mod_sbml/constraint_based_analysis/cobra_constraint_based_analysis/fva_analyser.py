@@ -11,14 +11,15 @@ from mod_sbml.sbml.sbml_manager import reverse_reaction
 __author__ = 'anna'
 
 
-
 def analyse_by_fva(cobra_model, bm_r_id, objective_sense='maximize', threshold=0):
     cobra_bm_r_id = format_r_id(bm_r_id)
     opt_value = optimise_biomass(cobra_model, cobra_bm_r_id, objective_sense, level=logging.DEBUG)
-    opt_value = round_value(opt_value)
-    r_id2bounds = get_r_id2fva_bounds(cobra_model, threshold=threshold)
+    if opt_value:
+        opt_value = round_value(opt_value)
+        r_id2bounds = get_r_id2fva_bounds(cobra_model, threshold=threshold)
 
-    return r_id2bounds, opt_value
+        return r_id2bounds, opt_value
+    return None, None
 
 
 def create_fva_model(sbml, r_id2bounds, new_sbml):

@@ -66,7 +66,7 @@ def constraint_exchange_reactions(model, allowed_exchange_r_id2rev, cofactors=No
 def analyse_model(sbml, out_r_id, out_rev, res_dir, in_r_id2rev=None, threshold=ZERO_THRESHOLD, do_fva=True,
                   do_fba=True, do_efm=True, efms=None, max_efm_number=1000, min_pattern_len=0,
                   imp_rn_threshold=None, ub_ch_ids=None,
-                  generalize=False, title='', r_ids_of_interest=None, cofactors=None):
+                  generalize=False, title='', r_ids_of_interest=None, cofactors=None, do_patterns=True):
     logging.info("Preparing directories...")
     # create directories to store results
     create_dirs(res_dir, False)
@@ -208,58 +208,73 @@ def analyse_model(sbml, out_r_id, out_rev, res_dir, in_r_id2rev=None, threshold=
                                        serializer=lambda efm_id, efm_txt:
                                        serialize_efm(efm_id, id2efm[efm_id], model, efm_txt, out_r_id),
                                        suffix=lambda _: '', get_f_path=get_f_path)
+            description += '</div>'
 
             # Important reactions
+            description += \
+                '''<div class="mediabox">
+                       <h3>Important reactions</h3>'''
             imp_rn_threshold = calculate_imp_rn_threshold(id2efm, ess_rn_num, imp_rn_threshold)
             rn_dir = os.path.join(efm_dir, 'important')
             create_dirs(rn_dir)
             r_id2efm_ids, important_r_ids = get_important_reactions(id2efm, imp_rn_threshold)
-            imp_rn_txt = os.path.join(rn_dir, 'r_list.txt')
-            serialize_important_reactions(r_id2efm_ids, model, imp_rn_txt, imp_rn_threshold)
-            imp_rn_sbml = os.path.join(rn_dir, 'Model_important.xml')
-            r_ids2sbml(important_r_ids, sbml, imp_rn_sbml, suffix='important')
-
-            description += '''<p>Found <b>%d</b> reactions participating in at least <b>%d</b> EFMs
-                   (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>).</p>
-                   ''' % (len(important_r_ids), imp_rn_threshold, get_f_path(imp_rn_txt), get_f_path(imp_rn_sbml))
+            if important_r_ids:
+                imp_rn_txt = os.path.join(rn_dir, 'r_list.txt')
+                serialize_important_reactions(r_id2efm_ids, model, imp_rn_txt, imp_rn_threshold)
+                imp_rn_sbml = os.path.join(rn_dir, 'Model_important.xml')
+                r_ids2sbml(important_r_ids, sbml, imp_rn_sbml, suffix='important')
+                description += '''<p>Found <b>%d</b> reactions participating in at least <b>%d</b> EFMs
+                       (<a href="%s" target="_blank">detailed description</a>, <a href="%s" download>SBML submodel</a>).</p>
+                       ''' % (len(important_r_ids), imp_rn_threshold, get_f_path(imp_rn_txt), get_f_path(imp_rn_sbml))
+                update_vis_layers(important_r_ids, 'Important reactions', id2mask, layer2mask, mask_shift, model, vis_r_ids)
+                mask_shift += 1
+            else:
+                description += '''<p>Did not find any reactions participating in at least <b>%d</b> EFMs.</p>
+                       ''' % (imp_rn_threshold)
+            description += '</div>'
 
             avg_efm_len = sum((len(efm) for efm in id2efm.itervalues())) / len(id2efm)
             min_efm_len = min((len(efm) for efm in id2efm.itervalues()))
 
-            description += '</div>'
-
-            description += '''<div class="mediabox">
-                       <h3>Patterns</h3>'''
-
             # Patterns
-            min_pattern_len = calculate_min_pattern_len(avg_efm_len, ess_rn_num, min_efm_len, min_pattern_len)
-            pattern_dir = os.path.join(efm_dir, 'patterns')
-            create_dirs(pattern_dir)
-            p_id2efm_ids, id2pattern = classify_efms(id2efm, min_pattern_len=min_pattern_len,
-                                                                           min_efm_num=imp_rn_threshold)
-            sorter = get_pattern_sorter(id2pattern, p_id2efm_ids)
-            patterns_txt = os.path.join(pattern_dir, 'patterns.txt')
-            serialize_patterns(p_id2efm_ids, id2pattern, patterns_txt, min_pattern_len, all_efm_intersection,
-                               min_efm_num=imp_rn_threshold, sorter=sorter)
+            if do_patterns:
+                description += '''<div class="mediabox">
+                           <h3>Patterns</h3>'''
+                min_pattern_len = calculate_min_pattern_len(avg_efm_len, ess_rn_num, min_efm_len, min_pattern_len)
+                pattern_dir = os.path.join(efm_dir, 'patterns')
+                create_dirs(pattern_dir)
+                p_id2efm_ids, id2pattern = classify_efms(id2efm, min_pattern_len=min_pattern_len,
+                                                                               min_efm_num=imp_rn_threshold)
 
-            description += '''
-                       <p>Detected <b>%d</b> patterns of length at least <b>%d</b>,
-            found in at least <b>%d</b> EFMs
-            (<a href="%s" target="_blank">detailed description</a>).</p>
-            ''' % (len(id2pattern), min_pattern_len, imp_rn_threshold, get_f_path(patterns_txt))
+                if id2pattern:
+                    sorter = get_pattern_sorter(id2pattern, p_id2efm_ids)
+                    patterns_txt = os.path.join(pattern_dir, 'patterns.txt')
+                    serialize_patterns(p_id2efm_ids, id2pattern, patterns_txt, min_pattern_len, all_efm_intersection,
+                                       min_efm_num=imp_rn_threshold, sorter=sorter)
+                    description += '''
+                               <p>Detected <b>%d</b> patterns of length at least <b>%d</b>,
+                    found in at least <b>%d</b> EFMs
+                    (<a href="%s" target="_blank">detailed description</a>).</p>
+                    ''' % (len(id2pattern), min_pattern_len, imp_rn_threshold, get_f_path(patterns_txt))
 
-            # 3 most common patterns
-            mask_shift, description\
-                = process_n_fms(sbml, model, description, directory=pattern_dir, id2fm=id2pattern, id2mask=id2mask,
-                                       layer2mask=layer2mask, mask_shift=mask_shift, vis_r_ids=vis_r_ids,
-                                       sort_criterion='most common', name='pattern',
-                                       sorter=lambda (p_id, _): -len(p_id2efm_ids[p_id]),
-                                       serializer=lambda p_id, pattern_txt:
-                                       serialize_pattern(p_id, id2pattern[p_id], p_id2efm_ids[p_id], model, pattern_txt),
-                                       suffix=lambda p_id:
-                                       'found in <b>%d</b> EFMs ' % len(p_id2efm_ids[p_id]),
-                                       get_f_path=get_f_path)
-            description += '</div>'
+                    # 3 most common patterns
+                    mask_shift, description\
+                        = process_n_fms(sbml, model, description, directory=pattern_dir, id2fm=id2pattern, id2mask=id2mask,
+                                               layer2mask=layer2mask, mask_shift=mask_shift, vis_r_ids=vis_r_ids,
+                                               sort_criterion='most common', name='pattern',
+                                               sorter=lambda (p_id, _): -len(p_id2efm_ids[p_id]),
+                                               serializer=lambda p_id, pattern_txt:
+                                               serialize_pattern(p_id, id2pattern[p_id], p_id2efm_ids[p_id], model, pattern_txt),
+                                               suffix=lambda p_id:
+                                               'found in <b>%d</b> EFMs ' % len(p_id2efm_ids[p_id]),
+                                               get_f_path=get_f_path)
+                else:
+                    description += '''
+                               <p>Did not detect any patterns of length at least <b>%d</b>,
+                    found in at least <b>%d</b> EFMs.</p>
+                    ''' % (min_pattern_len, imp_rn_threshold)
+
+                description += '</div>'
 
             # Cliques
             description += '''<div class="mediabox">
@@ -269,22 +284,28 @@ def analyse_model(sbml, out_r_id, out_rev, res_dir, in_r_id2rev=None, threshold=
             clique_dir = os.path.join(efm_dir, 'cliques')
             create_dirs(clique_dir)
             id2clique = detect_cliques(id2efm, min_clique_size=min_clique_len, efm_num=imp_rn_threshold)
-            cliques_txt = os.path.join(clique_dir, 'cliques.txt')
-            serialize_cliques(id2clique, cliques_txt, min_clique_len, all_efm_intersection, min_efm_num=imp_rn_threshold)
-            description += '''<p>Detected <b>%d</b> cliques of length at least <b>%d</b>,
-            with <b>%d</b> as min number of common EFMs for related reactions
-            (<a href="%s" target="_blank">detailed description</a>).</p>''' \
-                           % (len(id2clique), min_clique_len, imp_rn_threshold, get_f_path(cliques_txt))
 
-            # 3 longest cliques
-            mask_shift, description \
-                = process_n_fms(sbml, model, description, directory=clique_dir, id2fm=id2clique, id2mask=id2mask,
-                                       layer2mask=layer2mask, mask_shift=mask_shift, vis_r_ids=vis_r_ids,
-                                       sort_criterion='longest', name='clique',
-                                       sorter=lambda (_, cl): -len(cl),
-                                       serializer=lambda cl_id, clique_txt:
-                                       serialize_clique(cl_id, id2clique[cl_id], model, clique_txt),
-                                       suffix=lambda _: '', get_f_path=get_f_path)
+            if id2clique:
+                cliques_txt = os.path.join(clique_dir, 'cliques.txt')
+                serialize_cliques(id2clique, cliques_txt, min_clique_len, all_efm_intersection, min_efm_num=imp_rn_threshold)
+                description += '''<p>Detected <b>%d</b> cliques of length at least <b>%d</b>,
+                with <b>%d</b> as min number of common EFMs for related reactions
+                (<a href="%s" target="_blank">detailed description</a>).</p>''' \
+                               % (len(id2clique), min_clique_len, imp_rn_threshold, get_f_path(cliques_txt))
+
+                # 3 longest cliques
+                mask_shift, description \
+                    = process_n_fms(sbml, model, description, directory=clique_dir, id2fm=id2clique, id2mask=id2mask,
+                                           layer2mask=layer2mask, mask_shift=mask_shift, vis_r_ids=vis_r_ids,
+                                           sort_criterion='longest', name='clique',
+                                           sorter=lambda (_, cl): -len(cl),
+                                           serializer=lambda cl_id, clique_txt:
+                                           serialize_clique(cl_id, id2clique[cl_id], model, clique_txt),
+                                           suffix=lambda _: '', get_f_path=get_f_path)
+            else:
+                description += '''<p>Did not detect any cliques of length at least <b>%d</b>,
+                with <b>%d</b> as min number of common EFMs for related reactions.</p>''' \
+                               % (min_clique_len, imp_rn_threshold)
 
             description += '</div>'
 
