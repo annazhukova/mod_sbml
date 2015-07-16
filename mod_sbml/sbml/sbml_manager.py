@@ -3,7 +3,8 @@ import logging
 
 import libsbml
 
-from mod_sbml.onto.obo_ontology import to_identifiers_org_format, miriam_to_term_id
+from mod_sbml.annotation.miriam_converter import to_identifiers_org_format
+from mod_sbml.annotation.rdf_annotation_helper import get_qualifier_values, add_annotation
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
 
@@ -16,47 +17,6 @@ GA_PREFIX = "GENE_ASSOCIATION:"
 PATHWAY_PREFIX = "SUBSYSTEM:"
 
 FORMULA_PREFIX = "FORMULA:"
-
-
-def get_annotation_term_of_type(element, qualifier_type):
-    cv_terms = element.getCVTerms()
-    if cv_terms:
-        for i in xrange(cv_terms.getSize()):
-            term = cv_terms.get(i)
-            if libsbml.BIOLOGICAL_QUALIFIER == term.getQualifierType() and qualifier_type == term.getBiologicalQualifierType():
-                yield term
-
-
-def get_qualifier_values(element, qualifier_type):
-    for term in get_annotation_term_of_type(element, qualifier_type):
-        for i in xrange(term.getNumResources()):
-            yield term.getResourceURI(i).replace("%3A", ":")
-
-
-def add_annotation(element, qualifier, annotation):
-    if not element.isSetMetaId():
-        element.setMetaId("m_{0}".format(element.getId()))
-    term = next(get_annotation_term_of_type(element, qualifier), None)
-    if not term:
-        term = libsbml.CVTerm(libsbml.BIOLOGICAL_QUALIFIER)
-        term.setBiologicalQualifierType(qualifier)
-        term.addResource(annotation)
-        element.addCVTerm(term, True)
-    else:
-        term.addResource(annotation)
-
-
-def remove_annotation(element, qualifier, annotation):
-    if not element.isSetMetaId():
-        element.setMetaId("m_{0}".format(element.getId()))
-    for term in get_annotation_term_of_type(element, qualifier):
-        term.removeResource(annotation)
-
-
-
-
-def get_annotations(entity, qualifier):
-    return (miriam_to_term_id(it) for it in get_qualifier_values(entity, qualifier))
 
 
 def _get_prefixed_notes_value(notes, result, prefix):
@@ -86,6 +46,7 @@ def get_gene_association(reaction):
     _get_prefixed_notes_value(node, result, GA_PREFIX)
     if result:
         return result.pop()
+    return ''
 
 
 def get_genes(reaction):
@@ -108,6 +69,13 @@ def gene_association2genes(gene_association):
     return genes
 
 
+def get_pathway_expression(reaction):
+    result = set()
+    node = reaction.getNotes()
+    _get_prefixed_notes_value(node, result, PATHWAY_PREFIX)
+    return result
+
+
 def get_subsystem2r_ids(sbml=None, model=None):
     subsystem2r_ids = defaultdict(set)
     no_pathway_r_ids = set()
@@ -117,9 +85,7 @@ def get_subsystem2r_ids(sbml=None, model=None):
         input_doc = libsbml.SBMLReader().readSBML(sbml)
         model = input_doc.getModel()
     for r in model.getListOfReactions():
-        result = set()
-        node = r.getNotes()
-        _get_prefixed_notes_value(node, result, PATHWAY_PREFIX)
+        result = get_pathway_expression(r)
         for pw in result:
             subsystem2r_ids[pw].add(r.getId())
         if not result:
@@ -141,81 +107,8 @@ def get_subsystem(reaction):
     return result
 
 
-def get_pathway2r_ids(sbml=None, model=None):
-    pw2r_ids = defaultdict(set)
-    no_pw_r_ids = set()
-    if not model and not sbml:
-        raise ValueError("Either sbml or model parameter should be specified")
-    if not model:
-        input_doc = libsbml.SBMLReader().readSBML(sbml)
-        model = input_doc.getModel()
-    for r in model.getListOfReactions():
-        found = False
-        for annotation in get_annotations(r, libsbml.BQB_IS_PART_OF):
-            if annotation.find("kegg.pathway") != -1:
-                pw2r_ids[annotation.replace("kegg.pathway:", '')].add(r.getId())
-                found = True
-        if not found:
-            no_pw_r_ids.add(r.getId())
-    # Should find the following pathways:
-    # 1. citrate cycle (TCA cycle) (hsa00020);
-    # 2. fatty acid metabolism (hsa01212) and 3 sub-pathways:
-    #   (a) fatty acid biosynthesis (hsa00061);
-    #   (b) fatty acid elongation (hsa00062);
-    #   (c) fatty acid degradation (hsa00071);
-    # 3. valine, leucine and isoleucine degradation (hsa00280);
-    # 4. synthesis and degradation of ketone bodies (hsa00072).
-
-    # Let's remove the sub-pathways
-    if "path:hsa01212" in pw2r_ids:
-        for key in ("path:hsa00061", "path:hsa00062", "path:hsa00071"):
-            if key in pw2r_ids:
-                del pw2r_ids[key]
-
-    return pw2r_ids, no_pw_r_ids
-
-
-def get_kegg_r_id2r_ids(model):
-    kegg_r_id2r_ids = defaultdict(set)
-    for r in model.getListOfReactions():
-        k_r_id = get_kegg_r_id(r)
-        if k_r_id:
-            kegg_r_id2r_ids[k_r_id].add(r.getId())
-    return kegg_r_id2r_ids
-
-
-def get_kegg_m_id2m_ids(model):
-    kegg_m_id2m_ids = defaultdict(set)
-    for m in model.getListOfSpecies():
-        k_m_id = get_kegg_m_id(m)
-        if k_m_id:
-            kegg_m_id2m_ids[k_m_id].add(m.getId())
-    return kegg_m_id2m_ids
-
-
-def get_kegg_r_id(r):
-    for annotation in get_annotations(r, libsbml.BQB_IS):
-        if annotation.find("kegg.reaction") != -1:
-            return annotation.replace("kegg.reaction:", '')
-    return None
-
-
-def get_kegg_m_id(m):
-    for annotation in get_annotations(m, libsbml.BQB_IS):
-        if annotation.find("kegg.compound") != -1:
-            return annotation.replace("kegg.compound:", '')
-    return None
-
-
-def get_chebi_id(m):
-    for annotation in get_annotations(m, libsbml.BQB_IS):
-        if annotation.lower().find("chebi") != -1:
-            return annotation.lower().replace("obo.chebi:", '').replace("chebi:chebi:", 'chebi:')
-    return None
-
-
 def get_taxonomy(model):
-    occurs_in = get_qualifier_values(model.getAnnotation(), libsbml.BQB_OCCURS_IN)
+    occurs_in = get_qualifier_values(model, libsbml.BQB_OCCURS_IN)
     for it in occurs_in:
         start = it.find("taxonomy")
         if start != -1:
@@ -254,13 +147,24 @@ def get_products(reaction, stoichiometry=False):
         return (species_ref.getSpecies() for species_ref in reaction.getListOfProducts())
 
 
-def get_metabolites(reaction, stoichiometry=False):
-    return set(get_reactants(reaction, stoichiometry)) | set(get_products(reaction, stoichiometry))
+def get_modifiers(reaction, stoichiometry=False):
+    if stoichiometry:
+        return ((species_ref.getSpecies(), get_stoichiometry(species_ref)) for species_ref in
+                reaction.getListOfModifiers())
+    else:
+        return (species_ref.getSpecies() for species_ref in reaction.getListOfModifiers())
+
+
+def get_metabolites(reaction, stoichiometry=False, include_modifiers=False):
+    result = set(get_reactants(reaction, stoichiometry)) | set(get_products(reaction, stoichiometry))
+    if include_modifiers:
+        result |= set(get_modifiers(reaction, stoichiometry))
+    return result
 
 
 def get_r_comps(r_id, model):
     r = model.getReaction(r_id)
-    return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r)}
+    return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=True)}
 
 
 def create_species(model, compartment_id, name=None, bound=False, id_=None):

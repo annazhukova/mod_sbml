@@ -7,9 +7,9 @@ import openpyxl
 from openpyxl.styles import Style, Font
 
 from mod_cobra.gibbs.reaction_boundary_manager import get_bounds
-from mod_sbml.sbml.sbml_manager import get_kegg_m_id, get_kegg_r_id, get_gene_association, get_r_comps, get_reactants, \
-    get_products
+from mod_sbml.sbml.sbml_manager import get_gene_association, get_r_comps, get_reactants, get_products
 from mod_sbml.serialization.xlsx_helper import save_data, add_values, HEADER_STYLE, BASIC_STYLE
+from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id, get_kegg_r_id
 
 __author__ = 'anna'
 

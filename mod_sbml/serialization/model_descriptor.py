@@ -1,11 +1,13 @@
 from collections import defaultdict
 
-from mod_sbml.onto.chebi_annotator import get_chebi, get_species_to_chebi
-from mod_sbml.kegg.pathway_manager import get_pw_name
-from mod_sbml.kegg.reaction_manager import get_formula2kegg_compound
-from model_comparison.model_matcher import group_metabolites, group_rs
-from mod_sbml.onto.obo_ontology import parse
-from mod_sbml.sbml.sbml_manager import get_metabolites, get_pathway2r_ids, get_subsystem2r_ids, \
+# from mod_sbml.annotation.chebi.chebi_annotator import get_species_to_chebi
+from mod_sbml.annotation.kegg.pathway_manager import get_pw_name
+from mod_sbml.annotation.kegg.kegg_annotator import get_pathway2r_ids
+# from mod_sbml.onto.onto_getter import get_chebi
+# from mod_sbml.annotation.kegg.reaction_manager import get_formula2kegg_compound
+# from model_comparison.model_matcher import group_metabolites, group_rs
+# from mod_sbml.onto.obo_ontology import parse
+from mod_sbml.sbml.sbml_manager import get_metabolites, get_subsystem2r_ids, \
     get_reactants, get_products
 
 
@@ -57,17 +59,17 @@ def model_statistics(model, org, groups=True, pathways=True, extracellular=None)
         print([model.getCompartment(c_id).name for c_id in c_ids], c2reactions[c_ids])
     print("---------------------------------------------------")
 
-    # Element groups
-    if groups:
-        chebi = parse(get_chebi())
-        m_id2chebi = get_species_to_chebi(model, chebi)
-        formula2kegg = get_formula2kegg_compound()
-        group2m_ids, m_id2group, m_group2info = group_metabolites(model, m_id2chebi, chebi, formula2kegg)
-        print("Metabolite types: ", len(m_group2info.keys()))
-        group2r_ids, r_id2group, r_group2info = group_rs(model, lambda m_id: m_id2group[m_id])
-        print("Reaction types: ", len(r_group2info.keys()))
-        transport_groups = {r_id2group[r_id] for r_id in transport}
-        print("Transport types: ", len(transport_groups))
+    # # Element groups
+    # if groups:
+    #     chebi = parse(get_chebi())
+    #     m_id2chebi = get_species_to_chebi(model, chebi)
+    #     formula2kegg = get_formula2kegg_compound()
+    #     group2m_ids, m_id2group, m_group2info = group_metabolites(model, m_id2chebi, chebi, formula2kegg)
+    #     print("Metabolite types: ", len(m_group2info.keys()))
+    #     group2r_ids, r_id2group, r_group2info = group_rs(model, lambda m_id: m_id2group[m_id])
+    #     print("Reaction types: ", len(r_group2info.keys()))
+    #     transport_groups = {r_id2group[r_id] for r_id in transport}
+    #     print("Transport types: ", len(transport_groups))
 
     # Pathways
     if pathways:
