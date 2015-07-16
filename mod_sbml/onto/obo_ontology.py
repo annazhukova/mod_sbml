@@ -220,6 +220,10 @@ def get_name_bis(name):
     return ''.join(e for e in name if e.isalnum())
 
 
+def is_a(child, parent):
+    return child in parent.get_descendants(False)
+
+
 class Ontology:
     def __init__(self):
         self.roots = set()
@@ -366,9 +370,6 @@ class Ontology:
             return self.alt_id2term[term_id]
         return None
 
-    def is_a(self, child, parent):
-        return child in parent.get_descendants(False)
-
     def part_of(self, part_id, whole_ids):
         term = self.get_term(part_id)
         if not term:
@@ -389,12 +390,12 @@ class Ontology:
                 candidates = parents | wholes
                 for it in candidates:
                     candidate = self.get_term(it)
-                    if (it in whole_ids) and not self.is_a(part, candidate):
+                    if (it in whole_ids) and not is_a(part, candidate):
                         result.add(it)
                         continue
                     result |= whole_ids & part_of(candidate)
                     result |= {t_id for t_id in set(whole_ids) & candidate.get_parent_ids() if
-                               not self.is_a(part, self.get_term(t_id))}
+                               not is_a(part, self.get_term(t_id))}
                     items.add(candidate)
             term_set = items
         return result
@@ -515,7 +516,6 @@ class Ontology:
         name_bis = get_name_bis(name)
         return (set(self.name2term_ids[name]) if name in self.name2term_ids else set()) \
                | (set(self.name2term_ids[name_bis]) if name_bis in self.name2term_ids else set())
-
 
     def common_points(self, terms, depth=None, relationships=None):
         if not terms or depth is not None and depth <= 0:

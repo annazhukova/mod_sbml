@@ -207,19 +207,18 @@ def reverse_reaction(r):
         r.removeProduct(m.getSpecies())
 
 
-def generate_unique_id(model, id_=None):
+def generate_unique_id(model, id_=None, i=0):
     if not id_:
-        id_ = "new_"
+        id_ = 's_'
     else:
-        id_ = ''.join(e for e in id_ if e.isalnum())
-        if id_[0].isdigit():
+        id_ = ''.join(e for e in id_ if e.isalnum() or '_' == e)
+        if id_[0].isdigit() or '_' == id_[0]:
             id_ = 's_' + id_
-        if not model.getElementBySId(id_):
-            return id_
-    i = 0
-    while model.getElementBySId("%s_%d" % (id_, i)):
+    if not model.getElementBySId(id_):
+        return id_
+    while model.getElementBySId("%s%d" % (id_, i)):
         i += 1
-    return "%s_%d" % (id_, i)
+    return "%s%d" % (id_, i)
 
 
 def get_r_ids_by_s_ids(model, s_ids):
