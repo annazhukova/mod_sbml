@@ -1,5 +1,6 @@
 from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products
-from mod_sbml.sbml.ubiquitous_manager import get_cofactor_m_ids
+from mod_sbml.sbml.ubiquitous_manager import get_ubiquitous_chebi_ids, \
+    select_metabolite_ids_by_term_ids
 
 __author__ = 'anna'
 
@@ -30,7 +31,8 @@ def remove_unused_compartments(model):
 
 def specific_metabolite_model(model, cofactor_m_ids=None):
     if not cofactor_m_ids:
-        cofactor_m_ids = get_cofactor_m_ids(model)
+        ub_ch_ids = get_ubiquitous_chebi_ids(add_common=True, add_cofactors=True)
+        cofactor_m_ids = select_metabolite_ids_by_term_ids(model, ub_ch_ids)
     r_ids_to_remove = []
     for r in model.getListOfReactions():
         for m_id in set(get_reactants(r)) & cofactor_m_ids:

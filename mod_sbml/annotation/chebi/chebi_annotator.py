@@ -153,8 +153,8 @@ def get_species_to_chebi(model, chebi, guess=True):
     return species2chebi
 
 
-def get_cofactors(onto):
-    cofactors = set()
+def get_cofactor_ids(onto):
+    cofactor_ids = set()
     sub_cofactors = onto.get_term(COFACTOR_CHEBI_ID).get_descendants(False)
 
     def is_cofactor(t_id):
@@ -166,12 +166,10 @@ def get_cofactors(onto):
         subj, rel, obj = it
         if rel == HAS_ROLE_RELATIONSHIP and is_cofactor(obj):
             subj_term = onto.get_term(subj)
-            for t in onto.get_generalized_descendants(subj_term, False, set(), CONJUGATE_ACID_BASE_RELATIONSHIPS):
-                cofactors |= t.get_all_ids()
-            for t in onto.get_equivalents(subj_term, CONJUGATE_ACID_BASE_RELATIONSHIPS):
-                cofactors |= t.get_all_ids()
-            cofactors |= subj_term.get_all_ids()
-    return cofactors
+            cofactor_ids |= {t.get_id() for t in
+                             onto.get_generalized_descendants(subj_term, False, set(), EQUIVALENT_RELATIONSHIPS)}
+            cofactor_ids.add(subj_term.get_id())
+    return add_equivalent_chebi_ids(onto, cofactor_ids)
 
 
 def add_equivalent_chebi_ids(onto, chebi_ids):
@@ -179,7 +177,7 @@ def add_equivalent_chebi_ids(onto, chebi_ids):
                   (reduce(lambda s1, s2: s1 | s2,
                           (it.get_all_ids() for it in onto.get_equivalents(t, relationships=EQUIVALENT_RELATIONSHIPS)),
                           t.get_all_ids())
-                   for t in (onto.get_term(ub_id) for ub_id in chebi_ids)), chebi_ids)
+                   for t in (it for it in (onto.get_term(ub_id) for ub_id in chebi_ids) if it)), chebi_ids)
 
 
 
