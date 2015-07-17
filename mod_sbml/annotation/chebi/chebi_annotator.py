@@ -18,6 +18,8 @@ CONJUGATE_ACID_BASE_RELATIONSHIPS = {'is_conjugate_base_of', 'is_conjugate_acid_
 
 EQUIVALENT_RELATIONSHIPS = CONJUGATE_ACID_BASE_RELATIONSHIPS | {'is_tautomer_of'}
 
+MOLECULAR_ENTITY = 'chebi:23367'
+
 
 def get_chebi_id(m):
     for annotation in get_annotations(m, libsbml.BQB_IS):
@@ -155,7 +157,7 @@ def get_species_to_chebi(model, chebi, guess=True):
 
 def get_cofactor_ids(onto):
     cofactor_ids = set()
-    sub_cofactors = onto.get_term(COFACTOR_CHEBI_ID).get_descendants(False)
+    sub_cofactors = onto.get_descendants(COFACTOR_CHEBI_ID, False)
 
     def is_cofactor(t_id):
         if COFACTOR_CHEBI_ID == t_id:
@@ -172,12 +174,12 @@ def get_cofactor_ids(onto):
     return add_equivalent_chebi_ids(onto, cofactor_ids)
 
 
-def add_equivalent_chebi_ids(onto, chebi_ids):
+def add_equivalent_chebi_ids(ontology, chebi_ids):
     return reduce(lambda s1, s2: s1 | s2,
                   (reduce(lambda s1, s2: s1 | s2,
-                          (it.get_all_ids() for it in onto.get_equivalents(t, relationships=EQUIVALENT_RELATIONSHIPS)),
+                          (it.get_all_ids() for it in ontology.get_equivalents(t, relationships=EQUIVALENT_RELATIONSHIPS)),
                           t.get_all_ids())
-                   for t in (it for it in (onto.get_term(ub_id) for ub_id in chebi_ids) if it)), chebi_ids)
+                   for t in (it for it in (ontology.get_term(ub_id) for ub_id in chebi_ids) if it)), chebi_ids)
 
 
 
