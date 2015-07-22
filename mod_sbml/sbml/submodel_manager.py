@@ -6,12 +6,12 @@ __author__ = 'anna'
 
 
 def submodel(r_ids_to_keep, model):
-    for r_id in [r.id for r in model.getListOfReactions() if not r.id in r_ids_to_keep]:
+    for r_id in [r.id for r in model.getListOfReactions() if r.id not in r_ids_to_keep]:
         model.removeReaction(r_id)
     s_ids_to_keep = set()
     for r in model.getListOfReactions():
-        s_ids_to_keep |= get_metabolites(r)
-    for s_id in [s.id for s in model.getListOfSpecies() if not s.id in s_ids_to_keep]:
+        s_ids_to_keep |= get_metabolites(r, include_modifiers=True)
+    for s_id in [s.id for s in model.getListOfSpecies() if s.id not in s_ids_to_keep]:
         model.removeSpecies(s_id)
     remove_unused_compartments(model)
 
@@ -46,3 +46,14 @@ def specific_metabolite_model(model, cofactor_m_ids=None):
     for m_id in cofactor_m_ids:
         model.removeSpecies(m_id)
     remove_unused_compartments(model)
+
+
+def biomassless_model(model):
+    has_biomass = lambda s: s and -1 != s.lower().find('biomass')
+    biomass_s_ids = {species.getId() for species in model.getListOfSpecies()
+                     if has_biomass(species.getName()) or has_biomass(species.getId())}
+    r_ids_to_keep = {reaction.getId() for reaction in model.getListOfReactions()
+                     if not has_biomass(reaction.getName()) and not has_biomass(reaction.getId())
+                     and not biomass_s_ids & get_metabolites(reaction, include_modifiers=True)}
+    return submodel(r_ids_to_keep, model)
+

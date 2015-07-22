@@ -192,7 +192,7 @@ def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_
 def add_metabolite(ws, m_id, model, row, col, m2kegg, m2chebi):
     m = model.getSpecies(m_id)
     c = model.getCompartment(m.getCompartment())
-    values = [m.id, format_m_name(m, model, False), c.name, m2kegg(m), m2chebi(m_id, model)]
+    values = [m.id, format_m_name(m, model, False, False), c.name, m2kegg(m), m2chebi(m_id, model)]
     add_values(ws, row, col, values)
 
 

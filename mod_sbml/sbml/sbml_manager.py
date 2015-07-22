@@ -97,7 +97,7 @@ def get_formulas(species):
     result = set()
     node = species.getNotes()
     _get_prefixed_notes_value(node, result, FORMULA_PREFIX)
-    return result
+    return {formula.strip() for formula in result if formula and '.' != formula.strip()}
 
 
 def get_subsystem(reaction):

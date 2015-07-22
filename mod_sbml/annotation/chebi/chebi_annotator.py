@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 import libsbml
-from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id
 
 from mod_sbml.annotation.miriam_converter import to_identifiers_org_format
 from mod_sbml.sbml.sbml_manager import get_formulas
@@ -30,11 +29,11 @@ def get_chebi_id(m):
 
 def get_term(entity, chebi):
     for is_annotation in get_is_annotations(entity):
-        term = chebi.get_term(is_annotation)
+        term = chebi.get_term(is_annotation, check_only_ids=False)
         if term:
             return term
     for is_vo_annotation in get_is_vo_annotations(entity):
-        term = chebi.get_term(is_vo_annotation)
+        term = chebi.get_term(is_vo_annotation, check_only_ids=False)
         if term:
             return term
     return None
@@ -71,16 +70,9 @@ def find_term_id(entity, chebi):
 
     for formula in get_formulas(entity):
         if formula and formula != '.':
-            term = chebi.get_term(formula)
+            term = chebi.get_term(formula, check_only_ids=False)
             if term:
                 return term.get_id()
-
-    kegg = get_kegg_m_id(entity)
-    if kegg:
-        t_id = chebi.get_t_id_by_kegg(kegg)
-        if t_id:
-            return t_id
-
     return None
 
 
@@ -143,10 +135,10 @@ def get_species_to_chebi(model, chebi, guess=True):
                 name = normalize(species.getName()).replace(c_name, '').strip()
             if not name:
                 continue
-            t_ids = chebi.get_ids_by_name(name)
-            if not t_ids:
+            term = chebi.get_term(name, check_only_ids=False)
+            if not term:
                 continue
-            t_id = t_ids.pop()
+            t_id = term.get_id()
             for species in species_list:
                 species2chebi[species.getId()] = t_id
                 add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))

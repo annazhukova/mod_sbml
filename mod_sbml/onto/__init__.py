@@ -1,7 +1,7 @@
 import os
-import re
+
 from mod_sbml.onto.obo_ontology import Ontology
-from mod_sbml.onto.term import Term
+from mod_sbml.onto.term import Term, FORMULA
 
 __author__ = 'anna'
 
@@ -89,8 +89,8 @@ def parse(obo_file, relationships=None):
                 synonym = value[start + 1:end].replace('\\"', '"')
                 if synonym and synonym != '.':
                     term.add_synonym(synonym)
-                if end + 1 < len(value) and -1 != value[end + 1:].find('FORMULA'):
-                    term.add_formula(synonym)
+                    if end + 1 < len(value) and -1 != value[end + 1:].find('FORMULA'):
+                        term.add_xref(FORMULA, synonym)
             elif prefix == "xref":
                 value = value.strip()
                 if not value:
@@ -101,10 +101,12 @@ def parse(obo_file, relationships=None):
                 modifier = value.find("{")
                 if modifier != -1:
                     value = value[:modifier]
-                if value.find("KEGG COMPOUND:") != -1:
-                    term.add_alt_id(value.strip().replace(" ", "."))
-                    term.add_kegg(value.replace("KEGG COMPOUND:", '').strip())
-
+                colon = value.find(':')
+                if -1 != colon:
+                    db_name = value[:colon]
+                    value = value[colon + 1:].strip()
+                    if db_name and value:
+                        term.add_xref(db_name, value)
     if term:
         ontology.add_term(term)
     return ontology
@@ -180,6 +182,9 @@ def save(onto, path):
                 f.write('synonym: "{0}" RELATED UNKNOWN [ChEBI:]\n'.format(syn.replace('"', '\\"')))
             for parent in term.get_parent_ids():
                 f.write("is_a: {0}\n".format(parent))
+            for db in term.get_dbs():
+                for value in term.get_xrefs(db):
+                    f.write('xref: %s:%s "%s"' % (db, value, db))
             for (subj, rel, obj) in onto.get_term_relationships(id_, None, 1):
                 f.write("relationship: {1} {0}\n".format(obj, rel))
             f.write("\n")
@@ -189,5 +194,3 @@ def save(onto, path):
             f.write("name: {0}\n".format(rel.replace("_", " ")))
             f.write("is_cyclic: false\n")
             f.write("is_transitive: false\n")
-
-

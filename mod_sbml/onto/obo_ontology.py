@@ -9,8 +9,8 @@ PART_OF = "part_of"
 __author__ = 'anna'
 
 
-def get_name_variant(name):
-    return ''.join(e for e in name if e.isalnum())
+def normalize(name):
+    return ''.join(e for e in name if e.isalnum()).lower()
 
 
 class Ontology:
@@ -20,7 +20,7 @@ class Ontology:
         self.alt_id2term = {}
         self.name2term_ids = defaultdict(set)
         self.rel_map = defaultdict(set)
-        self.kegg2term_id = {}
+        self.xref2term_ids = defaultdict(set)
         self.parent2children = defaultdict(set)
 
     def get_all_terms(self):
@@ -57,13 +57,6 @@ class Ontology:
             result |= {rel for (subj, rel, obj) in rel_set}
         return result
 
-    def get_t_id_by_kegg(self, kegg):
-        if kegg:
-            kegg = kegg.lower().strip()
-        if kegg in self.kegg2term_id:
-            return self.kegg2term_id[kegg]
-        return None
-
     def add_term(self, term):
         if not term:
             return
@@ -75,15 +68,16 @@ class Ontology:
         names = set(term.get_synonyms())
         names.add(term.get_name())
         for name in names:
-            name = name.lower().strip()
-            name_bis = get_name_variant(name)
-            self.name2term_ids[name].add(t_id)
-            self.name2term_ids[name_bis].add(t_id)
+            name = normalize(name)
+            if name:
+                self.name2term_ids[name].add(t_id)
         if not term.get_parent_ids():
             self.roots.add(term)
-        for kegg in term.get_kegg_ids():
-            if kegg:
-                self.kegg2term_id[kegg.lower().strip()] = t_id
+        for db in term.get_dbs():
+            for value in term.get_xrefs(db):
+                value = value.lower()
+                self.xref2term_ids[value].add(t_id)
+                self.xref2term_ids['%s:%s' % (db, value)].add(t_id)
 
     def filter_relationships(self, rel_to_keep):
         to_remove = set()
@@ -113,16 +107,21 @@ class Ontology:
         names = set(term.get_synonyms())
         names.add(term.get_name())
         for name in names:
-            name = name.lower()
-            name_bis = get_name_variant(name)
-            for it in [name, name_bis]:
-                if it in self.name2term_ids:
-                    self.name2term_ids[it] -= {t_id}
-                    if not self.name2term_ids[it]:
-                        del self.name2term_ids[it]
-        for kegg in term.get_kegg_ids():
-            if kegg in self.kegg2term_id:
-                del self.kegg2term_id[kegg]
+            name = normalize(name)
+            if name and name in self.name2term_ids:
+                self.name2term_ids[name] -= {t_id}
+                if not self.name2term_ids[name]:
+                    del self.name2term_ids[name]
+        for db in term.get_dbs():
+            for value in term.get_xrefs(db):
+                value = value.lower()
+                self.xref2term_ids[value] -= {t_id}
+                if not self.xref2term_ids[value]:
+                    del self.xref2term_ids[value]
+                db_value = '%s:%s' % (db, value)
+                self.xref2term_ids[db_value] -= {t_id}
+                if not self.xref2term_ids[db_value]:
+                    del self.xref2term_ids[db_value]
         parents = term.get_parent_ids()
         if not parents:
             self.roots -= {term}
@@ -151,14 +150,37 @@ class Ontology:
         if t_id in self.rel_map:
             del self.rel_map[t_id]
 
-    def get_term(self, term_id):
-        if not term_id:
+    def get_term(self, key, check_only_ids=True):
+        """
+        Looks for a term corresponding to the given key.
+        By default, the key is treated as an id or alternative id.
+        If check_only_ids argument is set to False (by default it's True),
+        the key is also looked for in term names and xrefs.
+        :param key: str, by default the term's id or alternative id.
+        If check_only_ids argument is set to False (by default it's True),
+        the key is also looked for in term names and xrefs.
+        :param check_only_ids: boolean, optional. If set to False (by default it's True),
+        the key is also looked for in term names and xrefs.
+        :return: term (instance of class mod_sbml.onto.term.Term) corresponding to the given key,
+        or None if no such term was found.
+        """
+        if not key:
             return None
-        term_id = term_id.lower()
-        if term_id in self.id2term:
-            return self.id2term[term_id]
-        if term_id in self.alt_id2term:
-            return self.alt_id2term[term_id]
+        key = key.lower().strip()
+        if key in self.id2term:
+            return self.id2term[key]
+        if key in self.alt_id2term:
+            return self.alt_id2term[key]
+        if not check_only_ids:
+            if key in self.xref2term_ids:
+                for t_id in self.xref2term_ids[key]:
+                    if t_id in self.id2term:
+                        return self.id2term[t_id]
+            key = normalize(key)
+            if key in self.name2term_ids:
+                for t_id in self.name2term_ids[key]:
+                    if t_id in self.id2term:
+                        return self.id2term[t_id]
         return None
 
     def get_descendants(self, term_id, direct=True):
@@ -315,12 +337,6 @@ class Ontology:
 
     def get_roots(self):
         return set(self.roots)
-
-    def get_ids_by_name(self, name):
-        name = name.lower()
-        name_bis = get_name_variant(name)
-        return (set(self.name2term_ids[name]) if name in self.name2term_ids else set()) \
-               | (set(self.name2term_ids[name_bis]) if name_bis in self.name2term_ids else set())
 
     def common_points(self, terms, depth=None, relationships=None):
         if not terms or depth is not None and depth <= 0:
