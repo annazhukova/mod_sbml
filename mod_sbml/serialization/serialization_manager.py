@@ -4,11 +4,9 @@ import re
 import libsbml
 import openpyxl
 
-from openpyxl.styles import Style, Font
-
 from mod_cobra.gibbs.reaction_boundary_manager import get_bounds
 from mod_sbml.sbml.sbml_manager import get_gene_association, get_r_comps, get_reactants, get_products
-from mod_sbml.serialization.xlsx_helper import save_data, add_values, HEADER_STYLE, BASIC_STYLE
+from mod_sbml.serialization.xlsx_helper import save_data, add_values, HEADER_STYLE, BASIC_STYLE, RED_STYLE
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id, get_kegg_r_id
 
 __author__ = 'anna'
@@ -109,15 +107,14 @@ def get_cobra_r_formula(r, comp=True):
 
 def save_model_mappings(source_model, target_model,
                         m_id2m_id, m_id2m_id_diff_comp, s_m_ids_unmapped, m2kegg, m2chebi,
-                        r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg, r2bounds,
-                        filename):
+                        r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg, filename):
     workbook = openpyxl.Workbook()
     m_ws = workbook.create_sheet(0, "Metabolite mapping")
     save_metabolite_mappings(m_ws, source_model, target_model,
                              m_id2m_id, m_id2m_id_diff_comp, s_m_ids_unmapped, m2kegg, m2chebi)
     r_ws = workbook.create_sheet(1, "Reaction mapping")
     save_reaction_mappings(r_ws, source_model, target_model,
-                           r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg, r2bounds)
+                           r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg)
     workbook.save(filename)
 
 
@@ -153,8 +150,8 @@ def save_metabolite_mappings(ws, source_model, target_model, m_id2m_id, m_id2m_i
 
 
 def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_diff_comp,
-                           s_r_ids_unmapped, r2kegg, r2bounds):
-    headers = ["Id", "Name", "Compartments", "Formula", "KEGG", "Genes", "Lower bound", "Upper bound"]
+                           s_r_ids_unmapped, r2kegg):
+    headers = ["Id", "Name", "Formula", "Compartments", "KEGG", "L. bound", "Up. bound"]
     add_values(ws, 1, 2, [source_model.name if source_model.name else source_model.id], HEADER_STYLE)
     add_values(ws, 2, 2, headers, HEADER_STYLE)
     add_values(ws, 1, 2 + len(headers), [target_model.name if target_model.name else target_model.id], HEADER_STYLE)
@@ -164,28 +161,26 @@ def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_
     i = 4
     for s_r_id in sorted(r_id2r_id.iterkeys()):
         t_r_id = r_id2r_id[s_r_id]
-        s = Style(font=Font(color=openpyxl.styles.colors.BLACK))
-        if s_r_id in r2bounds and t_r_id in r2bounds and r2bounds[s_r_id] != r2bounds[t_r_id]:
-            s = Style(font=Font(color=openpyxl.styles.colors.RED))
-        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, r2bounds, s)
-        add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, r2bounds, s)
+        s = RED_STYLE if get_bounds(source_model.getReaction(s_r_id)) != get_bounds(target_model.getReaction(t_r_id)) \
+            else BASIC_STYLE
+        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, s)
+        add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, s)
         i += 1
 
     ws.cell(row=i, column=1).value = "Similar in different compartments"
     i += 1
     for s_r_id in sorted(r_id2r_id_diff_comp.iterkeys()):
         t_r_id = r_id2r_id_diff_comp[s_r_id]
-        s = Style(font=Font(color=openpyxl.styles.colors.BLACK))
-        if s_r_id in r2bounds and t_r_id in r2bounds and r2bounds[s_r_id] != r2bounds[t_r_id]:
-            s = Style(font=Font(color=openpyxl.styles.colors.RED))
-        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, r2bounds, s)
-        add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, r2bounds, s)
+        s = RED_STYLE if get_bounds(source_model.getReaction(s_r_id)) != get_bounds(target_model.getReaction(t_r_id)) \
+            else BASIC_STYLE
+        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, s)
+        add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, s)
         i += 1
 
     ws.cell(row=i, column=1).value = "Unmapped"
     i += 1
     for s_r_id in sorted(s_r_ids_unmapped):
-        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, r2bounds)
+        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg)
         i += 1
 
 
@@ -196,16 +191,10 @@ def add_metabolite(ws, m_id, model, row, col, m2kegg, m2chebi):
     add_values(ws, row, col, values)
 
 
-def add_reaction(ws, r_id, model, row, col, r2kegg, r2bounds,
-                 style=Style(font=Font(color=openpyxl.styles.colors.BLACK))):
+def add_reaction(ws, r_id, model, row, col, r2kegg, style=BASIC_STYLE):
     r = model.getReaction(r_id)
     cs = ", ".join(sorted((model.getCompartment(c_id).name for c_id in get_r_comps(r_id, model))))
-    kegg = r2kegg(r)
-    values = [r.id, r.name, cs, get_sbml_r_formula(model, r), kegg, get_gene_association(r)]
-    if r_id in r2bounds:
-        u_b, l_b = r2bounds[r_id]
-        values.append(l_b)
-        values.append(u_b)
+    values = [r.id, r.name, get_sbml_r_formula(model, r), cs, r2kegg(r)] + list(get_bounds(r))
     add_values(ws, row, col, values, style)
 
 

@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 from mod_sbml.utils.misc import remove_from_map
+from mod_sbml.utils.natsort import natsorted, natcasecmp
 
 PART_OF = "part_of"
 
@@ -173,12 +174,12 @@ class Ontology:
             return self.alt_id2term[key]
         if not check_only_ids:
             if key in self.xref2term_ids:
-                for t_id in self.xref2term_ids[key]:
+                for t_id in natsorted(self.xref2term_ids[key], cmp=natcasecmp):
                     if t_id in self.id2term:
                         return self.id2term[t_id]
             key = normalize(key)
             if key in self.name2term_ids:
-                for t_id in self.name2term_ids[key]:
+                for t_id in natsorted(self.name2term_ids[key], cmp=natcasecmp):
                     if t_id in self.id2term:
                         return self.id2term[t_id]
         return None
@@ -260,19 +261,30 @@ class Ontology:
             level |= set(self.get_level(p))
         return [1 + i for i in level]
 
-    def get_equivalents(self, term, rel=None, direction=0, relationships=None):
+    def get_equivalents(self, term, rel=None, direction=0, relationships=None, checked=None):
         term_id = term.get_id()
+        if checked is None:
+            checked = set()
+        checked.add(term_id)
         equals = set()
         for (subj, r, obj) in self.get_term_relationships(term_id, rel, direction):
             if not relationships or r in relationships:
-                equals.add(obj if subj == term_id else subj)
-        return {self.get_term(t_id) for t_id in equals}
+                eq_t_id = obj if subj == term_id else subj
+                if eq_t_id in checked:
+                    continue
+                checked.add(eq_t_id)
+                eq_term = self.get_term(eq_t_id)
+                equals.add(eq_term)
+                equals |= self.get_equivalents(eq_term, rel, direction, relationships, checked)
+        return equals
 
-    def get_sub_tree(self, t, relationships=None):
-        return self.get_generalized_descendants(t, False, set(), relationships) \
+    def get_sub_tree(self, t, relationships=None, depth=None):
+        return self.get_generalized_descendants(t, False, set(), relationships, depth=depth) \
                | self.get_equivalents(t, None, 0, relationships) | {t}
 
-    def get_generalized_descendants(self, term, direct=True, checked=None, relationships=None):
+    def get_generalized_descendants(self, term, direct=True, checked=None, relationships=None, depth=None):
+        if depth is not None and depth <= 0:
+            return set()
         if checked is None:
             checked = set()
         term2eqs = lambda t: {t} | self.get_equivalents(t, None, 0, relationships)
@@ -284,10 +296,11 @@ class Ontology:
                            (term2eqs(self.get_term(t)) for t in self.get_descendants(it.get_id(), True)),
                            set()) for it in terms),
                    set())
-        if direct:
+        if direct or 1 == depth:
             return direct_children
         checked |= terms
-        return reduce(cup, (self.get_generalized_descendants(t, direct, checked, relationships)
+        return reduce(cup, (self.get_generalized_descendants(t, direct, checked, relationships,
+                                                             depth - 1 if depth is not None else depth)
                             for t in direct_children - checked), direct_children)
 
     def get_generalized_ancestors(self, term, direct=True, checked=None, relationships=None, depth=None):
