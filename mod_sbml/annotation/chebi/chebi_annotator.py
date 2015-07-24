@@ -19,6 +19,8 @@ EQUIVALENT_RELATIONSHIPS = CONJUGATE_ACID_BASE_RELATIONSHIPS | {'is_tautomer_of'
 
 MOLECULAR_ENTITY = 'chebi:23367'
 
+CHEBI_PREFIX = "obo.chebi"
+
 
 def get_chebi_id(m):
     for annotation in get_annotations(m, libsbml.BQB_IS):
@@ -83,18 +85,15 @@ def get_species_to_chebi(model, chebi, guess=True):
 
     # process species types
     for s_type in model.getListOfSpeciesTypes():
-        has_chebi = next((annotation for annotation in get_is_annotations(s_type) if annotation.find('chebi') != -1),
-                         None)
         t_id = find_term_id(s_type, chebi)
         if t_id:
-            if not has_chebi:
-                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            if not next((annotation for annotation in get_is_annotations(s_type) if annotation.find('chebi') != -1),
+                         False):
+                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
             s_type_id2chebi[s_type.getId()] = t_id
 
     # process species
     for species in model.getListOfSpecies():
-        has_chebi = next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
-                         None)
         s_type_id = species.getSpeciesType()
         if s_type_id and s_type_id in s_type_id2chebi:
             t_id = s_type_id2chebi[s_type_id]
@@ -102,20 +101,23 @@ def get_species_to_chebi(model, chebi, guess=True):
             t_id = find_term_id(species, chebi)
         if t_id:
             species2chebi[species.getId()] = t_id
-            if not has_chebi:
-                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            if not next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
+                        False):
+                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
             if s_type_id and s_type_id not in s_type_id2chebi:
                 s_type_id2chebi[s_type_id] = t_id
-                add_annotation(model.getSpeciesType(s_type_id), libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+                add_annotation(model.getSpeciesType(s_type_id), libsbml.BQB_IS,
+                               to_identifiers_org_format(t_id, CHEBI_PREFIX))
         else:
             unannotated.append(species)
+
     s_t_id2unannotated = defaultdict(list)
     for species in unannotated:
         s_type_id = species.getSpeciesType()
         if s_type_id and s_type_id in s_type_id2chebi:
             t_id = s_type_id2chebi[s_type_id]
             species2chebi[species.getId()] = t_id
-            add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+            add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
         else:
             if s_type_id:
                 s_t_id2unannotated[s_type_id].append(species)
@@ -129,8 +131,9 @@ def get_species_to_chebi(model, chebi, guess=True):
             name = ''
             if s_type:
                 name = normalize(s_type.getName())
-            if not name:
-                species = species_list[0]
+            for species in species_list:
+                if name:
+                    break
                 c_name = normalize("[{0}]".format(model.getCompartment(species.getCompartment()).getName()))
                 name = normalize(species.getName()).replace(c_name, '').strip()
             if not name:
@@ -141,9 +144,9 @@ def get_species_to_chebi(model, chebi, guess=True):
             t_id = term.get_id()
             for species in species_list:
                 species2chebi[species.getId()] = t_id
-                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
             if s_type:
-                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, "obo.chebi"))
+                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
     return species2chebi
 
 

@@ -1,4 +1,4 @@
-from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products
+from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products, get_modifiers
 from mod_sbml.sbml.ubiquitous_manager import get_ubiquitous_chebi_ids, \
     select_metabolite_ids_by_term_ids
 
@@ -56,4 +56,17 @@ def biomassless_model(model):
                      if not has_biomass(reaction.getName()) and not has_biomass(reaction.getId())
                      and not biomass_s_ids & get_metabolites(reaction, include_modifiers=True)}
     return submodel(r_ids_to_keep, model)
+
+
+def remove_species(model, s_ids_to_remove):
+    for r in model.getListOfReactions():
+        for iterator, remove in ((get_reactants(r), r.removeReactant), (get_products(r), r.removeProduct),
+                                 (get_modifiers(r), r.removeModifier)):
+            for s_id in s_ids_to_remove & set(iterator):
+                remove(s_id)
+        if not r.getNumProducts() and not r.getNumReactants():
+            model.removeReaction(r.getId())
+    for s_id in s_ids_to_remove:
+        model.removeSpecies(s_id)
+    remove_unused_compartments(model)
 

@@ -25,5 +25,5 @@ def miriam_to_term_id(urn):
     return urn.strip()
 
 
-def to_identifiers_org_format(t_id, prefix="obo.chebi"):
+def to_identifiers_org_format(t_id, prefix=''):
     return "{0}{1}/{2}".format(IDENTIFIERS_ORG, prefix, t_id)
