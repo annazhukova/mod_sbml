@@ -138,9 +138,9 @@ def save_metabolite_mappings(ws, source_model, target_model, m_id2m_id, m_id2m_i
     i += 1
     for s_m_id in sorted(m_id2m_id_diff_comp.iterkeys()):
         add_metabolite(ws, s_m_id, source_model, i, 2, m2kegg, m2chebi, rev=True)
-        t_m_id = m_id2m_id_diff_comp[s_m_id]
-        add_metabolite(ws, t_m_id, target_model, i, 2 + len(headers), m2kegg, m2chebi)
-        i += 1
+        for t_m_id in m_id2m_id_diff_comp[s_m_id]:
+            add_metabolite(ws, t_m_id, target_model, i, 2 + len(headers), m2kegg, m2chebi)
+            i += 1
 
     ws.cell(row=i, column=1).value = "Unmapped"
     i += 1
@@ -170,12 +170,13 @@ def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_
     ws.cell(row=i, column=1).value = "Similar in different compartments"
     i += 1
     for s_r_id in sorted(r_id2r_id_diff_comp.iterkeys()):
-        t_r_id = r_id2r_id_diff_comp[s_r_id]
-        s = RED_STYLE if get_bounds(source_model.getReaction(s_r_id)) != get_bounds(target_model.getReaction(t_r_id)) \
-            else BASIC_STYLE
-        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, s, rev=True)
-        add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, s)
-        i += 1
+        add_reaction(ws, s_r_id, source_model, i, 2, r2kegg, rev=True)
+        for t_r_id in r_id2r_id_diff_comp[s_r_id]:
+            s = RED_STYLE if \
+                get_bounds(source_model.getReaction(s_r_id)) != get_bounds(target_model.getReaction(t_r_id)) \
+                else BASIC_STYLE
+            add_reaction(ws, t_r_id, target_model, i, 2 + len(headers), r2kegg, s)
+            i += 1
 
     ws.cell(row=i, column=1).value = "Unmapped"
     i += 1
@@ -186,8 +187,8 @@ def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_
 
 def add_metabolite(ws, m_id, model, row, col, m2kegg, m2chebi, rev=False):
     m = model.getSpecies(m_id)
-    c = model.getCompartment(m.getCompartment())
-    values = [format_m_name(m, model, False, False), m.id, c.name, m2chebi(m_id, model), m2kegg(m)]
+    c_name = model.getCompartment(m.getCompartment()).getName()
+    values = [format_m_name(m, model, False, False), m_id, c_name, m2chebi(m_id, model), m2kegg(m)]
     add_values(ws, row, col, reversed(values) if rev else values)
 
 

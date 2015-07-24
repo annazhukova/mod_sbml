@@ -30,6 +30,16 @@ def get_kegg_m_id(m):
     return None
 
 
+def find_kegg_m_id(m):
+    st = m.getSpeciesType()
+    kegg = None
+    if st:
+        kegg = get_kegg_m_id(st)
+    if not kegg:
+        kegg = get_kegg_m_id(m)
+    return kegg
+
+
 def get_pathway2r_ids(sbml=None, model=None):
     pw2r_ids = defaultdict(set)
     no_pw_r_ids = set()
