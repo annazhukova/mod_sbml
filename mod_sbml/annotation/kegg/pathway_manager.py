@@ -1,4 +1,7 @@
-import urllib2
+try:
+    import urllib2
+except:
+    pass
 
 ORG_HUMAN = "hsa"
 ORG_SACE = "sce"

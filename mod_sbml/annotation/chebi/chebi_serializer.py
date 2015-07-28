@@ -12,8 +12,11 @@ SUB_CHEBI = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), 
 SUB_CHEBI_TXT = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'subchebi.txt')
 
 COFACTORS_FILE = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'ub_cofactors.txt')
+PROTONS_FILE = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'protons.txt')
 COMMON_TERMS_FILE = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'ub_common.txt')
 
+
+PROTON_IDS = {'chebi:15378'}
 
 # most common ones, like water, H+, oxygen, NAD, etc.
 COMMON_UB_IDS = {'chebi:17808', 'chebi:37568', 'chebi:24636', 'chebi:15422', 'chebi:15377', 'chebi:15378',
@@ -32,8 +35,8 @@ COMMON_UB_IDS = {'chebi:17808', 'chebi:37568', 'chebi:24636', 'chebi:15422', 'ch
                  'chebi:17544', 'chebi:28846', 'chebi:29033', 'chebi:17677', 'chebi:15996', 'chebi:18009',
                  'chebi:58210', 'chebi:61429', 'chebi:58280', 'chebi:18361', 'chebi:15918', 'chebi:246422',
                  'chebi:17239', 'chebi:73627', 'chebi:13389', 'chebi:16240', 'chebi:58245', 'chebi:29325',
-                 'chebi:13534', 'chebi:15351', 'chebi:26078', 'chebi:18367', 'chebi:28938', 'chebi:36080'}
-
+                 'chebi:13534', 'chebi:15351', 'chebi:26078', 'chebi:18367', 'chebi:28938', 'chebi:36080'} \
+                | PROTON_IDS
 
 def get_chebi():
     return SUB_CHEBI_TXT
@@ -73,5 +76,13 @@ def serialize_ubiquitous_terms():
         f.write('\t'.join(ub_ch_ids))
 
 
+def serialize_proton_terms():
+    chebi = parse(CHEBI, EQUIVALENT_RELATIONSHIPS)
+    proton_ch_ids = add_equivalent_chebi_ids(chebi, PROTON_IDS)
+    with open(PROTONS_FILE, 'w+') as f:
+        f.write('\t'.join(proton_ch_ids))
+
+
 # serialize_sub_chebi()
 # serialize_ubiquitous_terms()
+# serialize_proton_terms()

@@ -9,7 +9,7 @@ from mod_sbml.annotation.kegg.reaction_manager import get_compounds2rn
 # from model_comparison.model_matcher import match_ms, match_rs, group_metabolites
 # from mod_sbml.onto.obo_ontology import parse
 from mod_sbml.sbml.sbml_manager import get_reactants, get_products
-from rdf_annotation_helper import get_is_annotations, get_annotations, add_annotation
+from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_annotations, add_annotation
 
 __author__ = 'anna'
 

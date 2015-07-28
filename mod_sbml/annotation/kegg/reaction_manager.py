@@ -1,5 +1,8 @@
 import os
-import urllib2
+try:
+    import urllib2
+except:
+    pass
 
 import openpyxl
 

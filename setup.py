@@ -31,5 +31,5 @@ setup(name='mod_sbml',
           'Topic :: Software Development',
       ],
       download_url='https://github.com/annazhukova/mod_sbml',
-      install_requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib', 'urllib2']
+      install_requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib']
 )

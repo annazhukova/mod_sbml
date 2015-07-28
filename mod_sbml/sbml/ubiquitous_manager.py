@@ -1,7 +1,7 @@
 from itertools import chain
 
 from mod_sbml.annotation.chebi.chebi_annotator import get_species_to_chebi, add_equivalent_chebi_ids
-from mod_sbml.annotation.chebi.chebi_serializer import get_chebi, COMMON_TERMS_FILE, COFACTORS_FILE
+from mod_sbml.annotation.chebi.chebi_serializer import get_chebi, COMMON_TERMS_FILE, COFACTORS_FILE, PROTONS_FILE
 from mod_sbml.onto import parse_simple
 from mod_sbml.sbml.sbml_manager import get_reactants, get_products
 
@@ -11,6 +11,7 @@ UBIQUITOUS_THRESHOLD = 20
 
 common_ch_ids = None
 cofactor_ch_ids = None
+proton_ch_ids = None
 
 
 def get_frequent_term_ids(model, species_id2chebi_id, threshold=UBIQUITOUS_THRESHOLD):
@@ -72,6 +73,14 @@ def get_ubiquitous_chebi_ids(add_common=True, add_cofactors=True, add_frequent=F
         ubiquitous_chebi_ids |= \
             add_equivalent_chebi_ids(chebi, get_frequent_term_ids(model, species_id2chebi_id, ubiquitous_threshold))
     return ubiquitous_chebi_ids
+
+
+def get_proton_ch_ids():
+    global proton_ch_ids
+    if not proton_ch_ids:
+        with open(PROTONS_FILE, 'r') as f:
+            proton_ch_ids = set(f.readline().split('\t'))
+    return proton_ch_ids
 
 
 def select_metabolite_ids_by_term_ids(model, selected_chebi_ids, species_id2chebi_id=None):
