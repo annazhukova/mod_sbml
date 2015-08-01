@@ -27,6 +27,9 @@ class Ontology:
     def get_all_terms(self):
         return self.id2term.values()
 
+    def __len__(self):
+        return len(self.id2term)
+
     def get_all_term_ids(self):
         return set(self.id2term.iterkeys())
 

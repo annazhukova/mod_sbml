@@ -35,7 +35,8 @@ COMMON_UB_IDS = {'chebi:17808', 'chebi:37568', 'chebi:24636', 'chebi:15422', 'ch
                  'chebi:17544', 'chebi:28846', 'chebi:29033', 'chebi:17677', 'chebi:15996', 'chebi:18009',
                  'chebi:58210', 'chebi:61429', 'chebi:58280', 'chebi:18361', 'chebi:15918', 'chebi:246422',
                  'chebi:17239', 'chebi:73627', 'chebi:13389', 'chebi:16240', 'chebi:58245', 'chebi:29325',
-                 'chebi:13534', 'chebi:15351', 'chebi:26078', 'chebi:18367', 'chebi:28938', 'chebi:36080'} \
+                 'chebi:13534', 'chebi:15351', 'chebi:26078', 'chebi:18367', 'chebi:28938', 'chebi:36080',
+                 'chebi:16189'} \
                 | PROTON_IDS
 
 def get_chebi():

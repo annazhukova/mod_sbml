@@ -115,28 +115,15 @@ def parse(obo_file, relationships=None):
 def filter_ontology(onto, terms_collection, relationships=None, min_deepness=None):
     terms_to_keep = set()
 
-    t_id2level = onto.get_t_id2level()
+    for term in terms_collection:
+        if term in terms_to_keep:
+            continue
+        terms_to_keep |= onto.get_sub_tree(term, relationships=relationships)
+        for ancestor in onto.get_generalized_ancestors(term, direct=False, checked=set(), relationships=relationships,
+                                                       depth=min_deepness):
+            terms_to_keep |= onto.get_sub_tree(ancestor, relationships=relationships)
 
-    def keep(term):
-        t_id = term.get_id()
-        if t_id in terms_to_keep:
-            return
-        terms_to_keep.add(t_id)
-        for parent_id in term.get_parent_ids():
-            if not min_deepness or max(t_id2level[parent_id]) >= min_deepness:
-                # add2map(level2term, max(onto.getLevel(p_term)), p_term.getName())
-                p_term = onto.get_term(parent_id)
-                keep(p_term)
-        for (subj, rel, obj) in onto.get_term_relationships(t_id, None, 0):
-            if relationships and not (rel in relationships):
-                continue
-            keep(onto.get_term(subj))
-            keep(onto.get_term(obj))
-
-    for t in terms_collection:
-        keep(t)
-
-    for term in (t for t in onto.get_all_terms() if t.get_id() not in terms_to_keep):
+    for term in (t for t in onto.get_all_terms() if t not in terms_to_keep):
         onto.remove_term(term, True)
 
     onto.filter_relationships(relationships)

@@ -49,13 +49,19 @@ def specific_metabolite_model(model, cofactor_m_ids=None):
 
 
 def biomassless_model(model):
-    has_biomass = lambda s: s and -1 != s.lower().find('biomass')
+    biomass_r_ids = get_biomass_r_ids(model)
+    r_ids_to_keep = {reaction.getId() for reaction in model.getListOfReactions()
+                     if reaction.getId() not in biomass_r_ids}
+    return submodel(r_ids_to_keep, model)
+
+
+def get_biomass_r_ids(model):
+    has_biomass = lambda s: s and (-1 != s.lower().find('biomass') or -1 != s.lower().find('growth'))
     biomass_s_ids = {species.getId() for species in model.getListOfSpecies()
                      if has_biomass(species.getName()) or has_biomass(species.getId())}
-    r_ids_to_keep = {reaction.getId() for reaction in model.getListOfReactions()
-                     if not has_biomass(reaction.getName()) and not has_biomass(reaction.getId())
-                     and not biomass_s_ids & get_metabolites(reaction, include_modifiers=True)}
-    return submodel(r_ids_to_keep, model)
+    return {reaction.getId() for reaction in model.getListOfReactions()
+            if has_biomass(reaction.getName()) or has_biomass(reaction.getId())
+            or biomass_s_ids & get_metabolites(reaction, include_modifiers=False)}
 
 
 def remove_species(model, s_ids_to_remove):
