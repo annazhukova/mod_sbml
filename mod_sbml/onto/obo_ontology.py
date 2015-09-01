@@ -199,6 +199,12 @@ class Ontology:
         return child_id and child_id.lower() in self.get_descendants(parent_id, False)
 
     def part_of(self, part_id, whole_ids):
+        """
+        Checks if a term with id part_id is a part of any of the terms with ids in whole_ids
+        :param part_id: id of the part term
+        :param whole_ids: ids of the potential whole terms
+        :return: ids of the terms among whole_ids that has_part part_id
+        """
         part = self.get_term(part_id)
         if not part:
             return None

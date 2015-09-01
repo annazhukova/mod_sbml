@@ -11,6 +11,8 @@ SUB_GO_TXT = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)),
 SUB_GO = os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'subgo.obo')
 
 CELLULAR_COMPONENT = 'go:0005575'
+CYTOPLASM = 'go:0005737'
+CYTOSOL = 'go:0005829'
 
 
 def get_go():
