@@ -1,11 +1,12 @@
 from collections import defaultdict
+import logging
 import re
 
 import libsbml
 import openpyxl
 
 from mod_cobra.gibbs.reaction_boundary_manager import get_bounds
-from mod_sbml.sbml.sbml_manager import get_gene_association, get_r_comps, get_reactants, get_products
+from mod_sbml.sbml.sbml_manager import get_gene_association, get_reactants, get_products
 from mod_sbml.serialization.xlsx_helper import save_data, add_values, HEADER_STYLE, BASIC_STYLE, RED_STYLE
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id, get_kegg_r_id
 
@@ -106,15 +107,29 @@ def get_cobra_r_formula(r, comp=True):
 
 
 def save_model_mappings(source_model, target_model,
-                        m_id2m_id, m_id2m_id_diff_comp, s_m_ids_unmapped, m2kegg, m2chebi,
-                        r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg, filename):
+                        (c_id_s2t, c_ids_unmapped,\
+                         m_id2m_id, m_id2m_id_diff_comp, m_ids_unmapped, \
+                         r_id2r_id, r_id2r_id_diff_comp, r_ids_unmapped, \
+                         s_s_id2chebi_id, t_s_id2chebi_id),
+                        filename):
+    logging.info('==========================\nCompartments: %d, %d\nMetabolites: %d %d %d\nReactions: %d %d %d' %
+                 (len(c_id_s2t), len(c_ids_unmapped),
+                  len(m_id2m_id), len(m_id2m_id_diff_comp), len(m_ids_unmapped),
+                  len(r_id2r_id), len(r_id2r_id_diff_comp), len(r_ids_unmapped)))
+
     workbook = openpyxl.Workbook()
-    m_ws = workbook.create_sheet(0, "Metabolite mapping")
+    c_ws = workbook.create_sheet(0, "Compartment mapping")
+    save_compartment_mappings(c_ws, source_model, target_model, c_id_s2t, c_ids_unmapped)
+    m_ws = workbook.create_sheet(1, "Metabolite mapping")
     save_metabolite_mappings(m_ws, source_model, target_model,
-                             m_id2m_id, m_id2m_id_diff_comp, s_m_ids_unmapped, m2kegg, m2chebi)
-    r_ws = workbook.create_sheet(1, "Reaction mapping")
+                             m_id2m_id, m_id2m_id_diff_comp, m_ids_unmapped, get_kegg_m_id,
+                             lambda m_id, model: (
+                                 s_s_id2chebi_id[m_id] if m_id in s_s_id2chebi_id else None) if model == source_model
+                             else (
+                                 t_s_id2chebi_id[m_id] if m_id in t_s_id2chebi_id else None))
+    r_ws = workbook.create_sheet(2, "Reaction mapping")
     save_reaction_mappings(r_ws, source_model, target_model,
-                           r_id2r_id, r_id2r_id_diff_comp, s_r_ids_unmapped, r2kegg)
+                           r_id2r_id, r_id2r_id_diff_comp, r_ids_unmapped, get_kegg_r_id)
     workbook.save(filename)
 
 
@@ -185,6 +200,28 @@ def save_reaction_mappings(ws, source_model, target_model, r_id2r_id, r_id2r_id_
         i += 1
 
 
+def save_compartment_mappings(ws, source_model, target_model, c_id2c_id, c_ids_unmapped):
+    headers = ["Name", "Id"]
+    add_values(ws, 1, 2, [source_model.name if source_model.name else source_model.id], HEADER_STYLE)
+    add_values(ws, 2, 2, reversed(headers), HEADER_STYLE)
+    add_values(ws, 1, 2 + len(headers), [target_model.name if target_model.name else target_model.id], HEADER_STYLE)
+    add_values(ws, 2, 2 + len(headers), headers, HEADER_STYLE)
+
+    ws.cell(row=3, column=1).value = "Matching"
+    i = 4
+    for s_c_id in sorted(c_id2c_id.iterkeys()):
+        t_c_id = c_id2c_id[s_c_id]
+        add_compartment(ws, s_c_id, source_model, i, 2, rev=True)
+        add_compartment(ws, t_c_id, target_model, i, 2 + len(headers))
+        i += 1
+
+    ws.cell(row=i, column=1).value = "Unmapped"
+    i += 1
+    for s_c_id in sorted(c_ids_unmapped):
+        add_compartment(ws, s_c_id, source_model, i, 2, rev=True)
+        i += 1
+
+
 def add_metabolite(ws, m_id, model, row, col, m2kegg, m2chebi, rev=False):
     m = model.getSpecies(m_id)
     c_name = model.getCompartment(m.getCompartment()).getName()
@@ -196,6 +233,12 @@ def add_reaction(ws, r_id, model, row, col, r2kegg, style=BASIC_STYLE, rev=False
     r = model.getReaction(r_id)
     values = [get_sbml_r_formula(model, r), r.id, r.name] + list(get_bounds(r)) + [r2kegg(r)]
     add_values(ws, row, col, reversed(values) if rev else values, style)
+
+
+def add_compartment(ws, c_id, model, row, col, rev=False):
+    c = model.getCompartment(c_id)
+    values = [c.name, c.id]
+    add_values(ws, row, col, reversed(values) if rev else values)
 
 
 def add_genes_to_reaction_list(sbml, path, out_path):

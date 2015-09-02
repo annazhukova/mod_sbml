@@ -1,6 +1,8 @@
 from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_is_vo_annotations
 
 GO_CYTOPLASM = 'go:0005737'
+GO_CYTOSOL = 'go:0005829'
+GO_CYTOPLASM_VARIANTS = {GO_CYTOPLASM, GO_CYTOSOL}
 GO_NUCLEUS = 'go:0005634'
 GO_ORGANELLE_OUTER_MEMBRANE = 'go:0031968'
 GO_ORGANELLE_INNER_MEMBRANE = 'go:0019866'
@@ -22,6 +24,13 @@ isAorPartOf = lambda t_id, onto, candidate_ids: {it for it in candidate_ids if
 
 
 def get_go_term(comp, onto):
+    """
+    Find a Gene Ontology term for a compartment of interest,
+    using its annotations or name.
+    :param comp: libSBML Compartment
+    :param onto: the Gene Ontology
+    :return: term if it was found otherwise None
+    """
     for is_annotation in get_is_annotations(comp):
         term = onto.get_term(is_annotation, check_only_ids=False)
         if term:
@@ -34,6 +43,13 @@ def get_go_term(comp, onto):
 
 
 def get_comp2go(model, onto):
+    """
+    Map compartments in the model to the Gene Ontology terms,
+    using annotations in the model and compartment names.
+    :param model: libSBML Model
+    :param onto: the Gene Ontology
+    :return: dict: comp_id -> go_term_id
+    """
     comp2go = {}
     for comp in model.getListOfCompartments():
         term = get_go_term(comp, onto)
@@ -43,9 +59,19 @@ def get_comp2go(model, onto):
 
 
 def comp2level(model, onto):
-    outs_set = next((True for comp in model.getListOfCompartments() if comp.getOutside() is not None
-                     and model.getCompartment(comp.getOutside())), False)
-    if not outs_set:
+    """
+    Calculates levels of compartments in a given model, where 0 level corresponds to the outmost compartment(s),
+    level i to the compartments surrounded by compartments of level i-1.
+    :param model: libSBML model containing the compartments to be classified
+    :param onto: the Gene Ontology
+    :return: dict: compartment_id -> level, e.g. {Boundary: 0, Cytosol: 1, Mitochondrion: 2, Peroxisome: 2}
+    """
+    outs_are_set = next((True for comp in model.getListOfCompartments() if comp.getOutside() is not None
+                         and model.getCompartment(comp.getOutside())), False)
+
+    # if the compartment hierarchy is not provided in the model,\
+    # let's infer it based on the Gene Ontology
+    if not outs_are_set:
         term_id2comp_id = {}
         for comp in model.getListOfCompartments():
             term = get_go_term(comp, onto)
@@ -55,8 +81,13 @@ def comp2level(model, onto):
         for in_t_id, out_t_id in in2out.iteritems():
             if out_t_id:
                 model.getCompartment(term_id2comp_id[in_t_id]).setOutside(term_id2comp_id[out_t_id])
+
     roots = {comp.getId() for comp in model.getListOfCompartments() if not comp.isSetOutside()}
     outsides = {comp.getOutside() for comp in model.getListOfCompartments() if comp.isSetOutside()}
+
+    # If there are several roots and one of them does not have any compartment inside it,
+    # let's make it the global root.
+    # (It is often a Boundary compartment that is not found in GO.)
     if len(roots) > 1:
         the_root = None
         for it in roots:
@@ -68,6 +99,7 @@ def comp2level(model, onto):
                 if not root == the_root:
                     model.getCompartment(root).setOutside(the_root)
             roots = {the_root}
+
     i = 0
     c_id2level = {}
     current = roots
@@ -104,15 +136,57 @@ def classify_cellular_components(t_ids, onto):
     outside_cell = t_ids - inside_cell
 
     organelle2parts = {it: set() for it in organelles}
-    no_organelle_parts = []
+    organelle_parts_wo_organelle = []
     for it in organelle_parts:
         orgs = onto.part_of(it, organelles)
         if orgs:
             organelle2parts[orgs.pop()].add(it)
         elif it not in organelle2parts:
-            no_organelle_parts.append(it)
+            organelle_parts_wo_organelle.append(it)
 
-    return organelle2parts, no_organelle_parts, inside_cell, outside_cell
+    # find organelles for which only parts are present in our model
+    organelle_ids = onto.get_descendants(GO_ORGANELLE, False) | {GO_ORGANELLE.lower()}
+    for it in organelle_parts_wo_organelle:
+        organelle = get_outside_comp_id(it, onto, organelle_ids)
+        if organelle:
+            if organelle in organelle2parts:
+                organelle2parts[organelle].add(it)
+            else:
+                # (*) add an additional organelle
+                organelle2parts[organelle] = {it}
+
+    # extracellular
+    extracellular = isAorPartOf(GO_EXTRACELLULAR, onto, outside_cell)
+
+    return organelle2parts, extracellular, inside_cell, outside_cell
+
+
+def classify_organelle_parts(parts, onto):
+    """
+    Classifies organelle parts into outer membranes, other membranes, other envelopes, inner membranes, organelles,
+    and parts located inside organelles
+    :param parts: ids of the GO terms of organelle parts to be classified
+    :param onto: the Gene Ontology (GO)
+    :return: tuple of sets of GO ids corresponding to (outer membranes, other membranes, other envelopes,
+    inner membranes, organelles, parts located inside organelles)
+    """
+    # envelope, membrane
+    envelopes = isAorPartOf(GO_ENVELOPE, onto, parts) | isAorPartOf(GO_MEMBRANE, onto, parts)
+    insides = parts - envelopes
+    # organelles
+    organelles = isA(GO_ORGANELLE, onto, insides)
+    insides -= organelles
+    # membranes
+    other_membranes = isA(GO_MEMBRANE, onto, envelopes)
+    other_envelopes = envelopes - other_membranes
+    # organelle inner membranes
+    in_membranes = isA(GO_ORGANELLE_INNER_MEMBRANE, onto, other_membranes)
+    other_membranes -= in_membranes
+    # organelle outer membranes
+    out_membranes = isA(GO_ORGANELLE_OUTER_MEMBRANE, onto, other_membranes)
+    other_membranes -= out_membranes
+
+    return out_membranes, other_membranes, other_envelopes, in_membranes, organelles, insides
 
 
 def nest_compartments_with_gene_ontology(t_ids, onto):
@@ -125,36 +199,23 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
     # Look for outside compartments in the Gene Ontology
     comp2out = {t_id: get_outside_comp_id(t_id, onto, t_ids) for t_id in t_ids}
 
-    organelle2parts, no_organelle_parts, inside_cell, outside_cell = classify_cellular_components(t_ids, onto)
+    organelle2parts, extracellular, inside_cell, outside_cell = classify_cellular_components(t_ids, onto)
+    # we might have added organelles that were not among t_ids, so let's add outsides for them
+    comp2out.update({organelle: get_outside_comp_id(organelle, onto, t_ids) for organelle in organelle2parts.iterkeys()})
+
     organelle_parts = reduce(lambda s1, s2: s1 | s2, organelle2parts.itervalues(), set(organelle2parts.iterkeys()))
 
-    # extracellular
-    extracellulars = isAorPartOf(GO_EXTRACELLULAR, onto, outside_cell)
     innermost_extracellular_comp = None
-    if extracellulars:
+    if extracellular:
         innermost_extracellular_comp, _ = \
-            correct_membranes(None, extracellulars, comp2out, onto)
+            correct_membranes(None, extracellular, comp2out, onto)
 
     outermost_cell_part = get_outer_most(onto, inside_cell - organelle_parts)
     cell_innermost, cell_outermost = \
         correct_membranes(outermost_cell_part, (inside_cell - organelle_parts) - {outermost_cell_part},
                           comp2out, onto)
 
-    # find organelles for which only parts are present in our model
-    organelle_ids = onto.get_descendants(GO_ORGANELLE, False) | {GO_ORGANELLE.lower()}
-    for it in no_organelle_parts:
-        organelle = get_outside_comp_id(it, onto, organelle_ids)
-        if organelle:
-            if organelle in organelle2parts:
-                organelle2parts[organelle].add(it)
-            else:
-                # (*) add an additional organelle
-                organelle2parts[organelle] = {it}
-                out_id = get_outside_comp_id(organelle, onto, t_ids)
-                if out_id:
-                    comp2out[organelle] = out_id
-
-    # surround those that are not surrounded, by extracellular
+    # surround those that are not surrounded
     for comp in comp2out.iterkeys():
         if comp in inside_cell:
             if not comp2out[comp]:
@@ -163,11 +224,11 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
                 else:
                     comp2out[comp] = innermost_extracellular_comp
 
-    # Correct organelle_membrane part_of organelle inferences:
+    # correct organelle_membrane part_of organelle inferences:
     for organelle, parts in organelle2parts.iteritems():
         correct_membranes(organelle, parts, comp2out, onto)
 
-    # Remove additional organelle added in (*)
+    # remove additional terms added before in (*)
     additional_organelles = (set(comp2out.iterkeys()) | {it for it in comp2out.itervalues() if it}) - t_ids
     for it in additional_organelles:
         outside = comp2out[it]
@@ -192,23 +253,6 @@ def correct_membranes(organelle, parts, comp2out, onto):
     :param onto: the Gene Ontology
     :return: the innermost element and the outermost element
     """
-    outside_comp = comp2out[organelle] if organelle \
-        else next((comp2out[it] for it in parts if not comp2out[it] in parts), None)
-    # envelope, membrane
-    envelopes = isAorPartOf(GO_ENVELOPE, onto, parts) | isAorPartOf(GO_MEMBRANE, onto, parts)
-    insides = parts - envelopes
-    # organelle
-    organelles = isA(GO_ORGANELLE, onto, insides)
-    insides -= organelles
-    # membrane
-    other_membranes = isA(GO_MEMBRANE, onto, envelopes)
-    other_envelopes = envelopes - other_membranes
-    # organelle inner membrane
-    in_membranes = isA(GO_ORGANELLE_INNER_MEMBRANE, onto, other_membranes)
-    other_membranes -= in_membranes
-    # organelle outer membrane
-    out_membranes = isA(GO_ORGANELLE_OUTER_MEMBRANE, onto, other_membranes)
-    other_membranes -= out_membranes
 
     def inside(ins, outs):
         while True:
@@ -219,20 +263,25 @@ def correct_membranes(organelle, parts, comp2out, onto):
                 return True
             ins = oo
 
-    current_outer = outside_comp
-    innermost, outermost = None, None
-
-    # a) process membranes
-    def process(elements, cur_outer, outer, inner):
-        if elements:
+    # process envelopes
+    def process(items, cur_outer, outer, inner):
+        if items:
             if cur_outer:
-                for it in elements:
-                    comp2out[it] = cur_outer
-            cur_outer = next(iter(elements))
+                comp2out.update({it: cur_outer for it in items})
+            cur_outer = next(iter(items))
             if not outer:
                 outer = cur_outer
             inner = cur_outer
         return cur_outer, inner, outer
+
+    outside_comp = comp2out[organelle] if organelle \
+        else next((comp2out[it] for it in parts if not comp2out[it] in parts), None)
+
+    current_outer = outside_comp
+    innermost, outermost = None, None
+
+    out_membranes, other_membranes, other_envelopes, in_membranes, organelles, insides = \
+        classify_organelle_parts(parts, onto)
 
     for elements in (out_membranes, other_membranes, other_envelopes, in_membranes):
         current_outer, innermost, outermost = \
@@ -270,31 +319,46 @@ def correct_membranes(organelle, parts, comp2out, onto):
     return innermost, outermost
 
 
-def get_outside_comp_id(comp_id, onto, variants):
-    variants = {it.lower() for it in variants}
+def get_outside_comp_id(comp_id, onto, options):
+    """
+    Find the compartment among the given options (if it exists)
+    that is the closest from outside to the compartment of interest.
+    :param comp_id: the Gene Ontology term id of the compartment of interest.
+    :param onto: the Gene Ontology
+    :param options: the Gene Ontology term ids of the potential outside compartments
+    :return: the Gene Ontology term id of the compartment among the given options
+    that is the closest from outside to the compartment of interest, if it exists, None otherwise.
+    """
+    options = {it.lower() for it in options}
     # we will surround nucleus and lipid particle by cytoplasm manually,
     # as it is not a membrane-bounded organelle
     # => not part of the cytoplasm according to the Gene Ontology
-    if isACheck(comp_id, GO_NUCLEUS, onto) and (GO_CYTOPLASM in variants):
-        return GO_CYTOPLASM
-    if isACheck(comp_id, GO_LIPID_PARTICLE, onto) and (GO_CYTOPLASM in variants):
-        return GO_CYTOPLASM
-    candidates = set(variants)
+    if isACheck(comp_id, GO_NUCLEUS, onto) or isACheck(comp_id, GO_LIPID_PARTICLE, onto):
+        cyto_intersection = GO_CYTOPLASM_VARIANTS & options
+        if cyto_intersection:
+            return next(iter(cyto_intersection))
+    candidates = set(options)
     candidates -= {comp_id}
     matches = onto.part_of(comp_id, candidates)
     return get_inner_most(onto, matches)
 
 
-def get_inner_most(onto, matches):
-    if not matches:
+def get_inner_most(onto, options):
+    """
+    Find the innermost compartment among the given options.
+    :param onto: the Gene Ontology
+    :param options: the Gene Ontology term ids of the compartments of interest
+    :return: the Gene Ontology term id of the innermost compartment among the given options.
+    """
+    if not options:
         return None
-    if len(matches) == 1:
-        return matches.pop()
+    if len(options) == 1:
+        return options.pop()
     # return id of the inner-most compartment
-    while matches:
-        it = matches.pop()
+    while options:
+        it = options.pop()
         no_better_candidate = True
-        for m in matches:
+        for m in options:
             if onto.is_a(m, it) or onto.part_of(m, [it]):
                 no_better_candidate = False
                 break
@@ -303,16 +367,22 @@ def get_inner_most(onto, matches):
     return None
 
 
-def get_outer_most(onto, matches):
-    if not matches:
+def get_outer_most(onto, options):
+    """
+    Find the outermost compartment among the given options.
+    :param onto: the Gene Ontology
+    :param options: the Gene Ontology term ids of the compartments of interest
+    :return: the Gene Ontology term id of the outermost compartment among the given options.
+    """
+    if not options:
         return None
-    if len(matches) == 1:
-        return matches.pop()
+    if len(options) == 1:
+        return options.pop()
     # return id of the outer-most compartment
-    while matches:
-        it = matches.pop()
+    while options:
+        it = options.pop()
         no_better_candidate = True
-        for m in matches:
+        for m in options:
             if onto.is_a(it, m) or onto.part_of(it, [m]):
                 no_better_candidate = False
                 break
