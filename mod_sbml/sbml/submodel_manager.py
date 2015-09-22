@@ -82,12 +82,12 @@ def remove_species(model, s_ids_to_remove):
     remove_unused_compartments(model)
 
 
-def create_lumped_reaction(r_id2coeff, model, id_prefix='rl_', zero_threshold=1e-3):
+def create_lumped_reaction(r_id2coeff, model, id_prefix='rl_', zero_threshold=1e-3, replace=True):
     new_r_id = generate_unique_id(model, id_=id_prefix)
     m_id2stoichiometry = compress_reaction_participants(model, r_id2coeff, zero_threshold=zero_threshold)
     new_r = model.createReaction()
     new_r.setId(new_r_id)
-    new_r.setName('lumped reaction: %s' % ''.join('%+g%s' % (coeff, r_id) for (r_id, coeff) in r_id2coeff.iteritems()))
+    new_r.setName('lumped reaction:%s' % ''.join(' %+g %s' % (coeff, r_id) for (r_id, coeff) in r_id2coeff.iteritems()))
     new_r.setReversible(False)
     for m_id, st in m_id2stoichiometry.iteritems():
         if st < 0:
@@ -98,8 +98,9 @@ def create_lumped_reaction(r_id2coeff, model, id_prefix='rl_', zero_threshold=1e
             sr = new_r.createProduct()
             sr.setSpecies(m_id)
             sr.setStoichiometry(st)
-    for r_id in r_id2coeff.iterkeys():
-        model.removeReaction(r_id)
+    if replace:
+        for r_id in r_id2coeff.iterkeys():
+            model.removeReaction(r_id)
     return new_r_id
 
 

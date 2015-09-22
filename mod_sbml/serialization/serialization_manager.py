@@ -110,7 +110,7 @@ def save_model_mappings(source_model, target_model,
                         (c_id_s2t, c_ids_unmapped,\
                          m_id2m_id, m_id2m_id_diff_comp, m_ids_unmapped, \
                          r_id2r_id, r_id2r_id_diff_comp, r_ids_unmapped, \
-                         s_s_id2chebi_id, t_s_id2chebi_id),
+                         s_s_id2chebi_id, t_s_id2chebi_id, _),
                         filename):
     logging.info('==========================\nCompartments: %d, %d\nMetabolites: %d %d %d\nReactions: %d %d %d' %
                  (len(c_id_s2t), len(c_ids_unmapped),
