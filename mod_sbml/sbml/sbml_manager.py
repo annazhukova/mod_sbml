@@ -167,7 +167,7 @@ def get_r_comps(r_id, model):
     return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=True)}
 
 
-def create_species(model, compartment_id, name=None, bound=False, id_=None):
+def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None):
     new_species = model.createSpecies()
     id_ = generate_unique_id(model, id_ if id_ else "s")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
@@ -175,16 +175,20 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None):
     if name:
         new_species.setName(name)
     new_species.setCompartment(compartment_id)
-    new_species.setSBOTerm(SBO_MATERIAL_ENTITY)
+    if type_id:
+        new_species.setSpeciesType(type_id)
+    new_species.setSBOTerm(sbo_id if sbo_id else SBO_MATERIAL_ENTITY)
     new_species.setBoundaryCondition(bound)
     return new_species
 
 
-def create_compartment(model, name, outside=None, term_id=None, id_=None):
+def create_compartment(model, name=None, outside=None, term_id=None, id_=None):
     new_comp = model.createCompartment()
     id_ = generate_unique_id(model, id_ if id_ else "c")
-    new_comp.setId(id_)
-    new_comp.setName(name)
+    if libsbml.LIBSBML_OPERATION_SUCCESS != new_comp.setId(id_):
+        logging.error("compartment %s creation error" % id_)
+    if name:
+        new_comp.setName(name)
     if outside:
         new_comp.setOutside(outside)
     if term_id:
@@ -267,22 +271,23 @@ def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
     return r_ids
 
 
-def create_reaction(model, rs, ps, name=None, reversible=True, _id=None):
-    def add_r_elements(elements, creator):
-        for (m_id, st) in elements:
-            element = creator()
-            element.setSpecies(m_id)
-            element.setStoichiometry(st)
-
-    r = model.createReaction()
-    r_id = generate_unique_id(model, _id if _id else 'r')
-    r.setName(name)
-    r.setReversible(reversible)
-    if libsbml.LIBSBML_OPERATION_SUCCESS != r.setId(r_id):
-        logging.error("reaction  ", r_id, " creation error")
-    add_r_elements(rs, r.createReactant)
-    add_r_elements(ps, r.createProduct)
-    return r
+def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=None):
+    new_r_id = generate_unique_id(model, id_=id_)
+    new_r = model.createReaction()
+    if libsbml.LIBSBML_OPERATION_SUCCESS != new_r.setId(new_r_id):
+        logging.error("reaction %s creation error" % new_r_id)
+    if name:
+        new_r.setName(name)
+    new_r.setReversible(reversible)
+    for m_id, st in r_id2st.iteritems():
+        sr = new_r.createReactant()
+        sr.setSpecies(m_id)
+        sr.setStoichiometry(st)
+    for m_id, st in p_id2st.iteritems():
+        sr = new_r.createProduct()
+        sr.setSpecies(m_id)
+        sr.setStoichiometry(st)
+    return new_r
 
 
 def find_reaction_by_reactant_product_names(model, r_name, p_name):
