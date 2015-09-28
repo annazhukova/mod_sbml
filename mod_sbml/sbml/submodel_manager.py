@@ -87,6 +87,8 @@ def compress_reaction_participants(model, r_id2coeff, zero_threshold=1e-3):
     m_id2stoichiometry = Counter()
     for r_id, coeff in r_id2coeff.iteritems():
         r = model.getReaction(r_id)
+        if not r:
+            print r_id, model.getId()
         m_id2stoichiometry.update({m_id: -st * coeff for (m_id, st) in get_reactants(r, stoichiometry=True)})
         m_id2stoichiometry.update({m_id: st * coeff for (m_id, st) in get_products(r, stoichiometry=True)})
     return {m_id: -st for (m_id, st) in m_id2stoichiometry.iteritems() if st < -zero_threshold},\

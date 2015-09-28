@@ -13,22 +13,6 @@ from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id, get_kegg_r_id
 __author__ = 'anna'
 
 
-def serialize_model_info(sbml, path, r_style=lambda r_id: BASIC_STYLE):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
-    wb = openpyxl.Workbook()
-    save_data(["Id", "Name", "Compartment", "Kegg"], (
-        (m.id, m.name, model.getCompartment(m.getCompartment()).name, get_kegg_m_id(m))
-        for m in sorted(model.getListOfSpecies(), key=lambda m: m.id)), ws_index=0, ws_name="Metabolites", wb=wb)
-    save_data(["Id", "Name", "Lower Bound", "Upper Bound", "Formula", "Kegg", "Gene association"],
-              ((r.id, r.name, get_bounds(r)[0], get_bounds(r)[1], get_sbml_r_formula(model, r, False), get_kegg_r_id(r),
-                get_gene_association(r))
-               for r in sorted(model.getListOfReactions(), key=lambda r: r.id)),
-              styles=(r_style(r.id) for r in sorted(model.getListOfReactions(), key=lambda r: r.id)),
-              ws_index=1, ws_name="Reactions", wb=wb)
-    wb.save(path)
-
-
 def read_reactions(path):
     workbook = openpyxl.load_workbook(path)
     worksheet = workbook.get_active_sheet()
