@@ -106,3 +106,41 @@ def serialize_common_part_to_csv(merged_sbml, sbml2id2id, common_ids, sbml2name,
     cr_num, r_csv = serialize_common_subpart_to_csv(reactions2df, 'reactions')
 
     return (cc_num, cm_num, cr_num), (comp_csv, m_csv, r_csv)
+
+
+def serialize_common_metabolites_compartments_to_csv(model_id2sbml, model_id2c_id_groups, model_id2m_id_groups,
+                                                     model_id2r_id_groups, prefix):
+
+    def serialize_common_subpart_to_csv(get_df, model_id2id_groups, suffix):
+        data = []
+        model_id2df = {}
+
+        for model_id, sbml in model_id2sbml.iteritems():
+            d = libsbml.SBMLReader().readSBML(sbml)
+            model = d.getModel()
+            model_id2df[model_id] = get_df(model)
+
+        for model_id2ids in model_id2id_groups:
+            for model_id in sorted(model_id2ids.keys()):
+                df = model_id2df[model_id]
+                for el_id in sorted(model_id2ids[model_id]):
+                    data_entry = [model_id]
+                    data_entry.extend(df[df.Id == el_id].values[0])
+                    data.append(data_entry)
+            data.append([None])
+
+        csv = '%s%s.csv' % (prefix, suffix)
+        columns = ['Model']
+        columns.extend(df.columns)
+        df2csv(DataFrame(data=data, columns=columns), csv)
+
+        return csv
+
+    m_csv = serialize_common_subpart_to_csv(metabolites2df, model_id2m_id_groups, 'metabolites') \
+        if model_id2m_id_groups else (0, None)
+    comp_csv = serialize_common_subpart_to_csv(compartments2df, model_id2c_id_groups, 'compartments') \
+        if model_id2c_id_groups else (0, None)
+    r_csv = serialize_common_subpart_to_csv(reactions2df, model_id2r_id_groups, 'reactions') \
+        if model_id2r_id_groups else (0, None)
+
+    return comp_csv, m_csv, r_csv
