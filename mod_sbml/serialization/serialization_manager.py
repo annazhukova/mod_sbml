@@ -5,9 +5,9 @@ import re
 import libsbml
 import openpyxl
 
-from mod_cobra.gibbs.reaction_boundary_manager import get_bounds
+from mod_sbml.sbml.reaction_boundary_manager import get_bounds
 from mod_sbml.sbml.sbml_manager import get_gene_association, get_reactants, get_products
-from mod_sbml.serialization.xlsx_helper import save_data, add_values, HEADER_STYLE, BASIC_STYLE, RED_STYLE
+from mod_sbml.serialization.xlsx_helper import add_values, HEADER_STYLE, BASIC_STYLE, RED_STYLE
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_m_id, get_kegg_r_id
 
 __author__ = 'anna'
@@ -71,23 +71,6 @@ def format_m_name(m, model, show_compartment=True, show_id=True):
     if not show_compartment:
         name = name.replace("[%s]" % c_name, "").replace("[%s]" % c.getId(), "").strip()
     return "%s(%s)" % (name, m.id) if show_id else name
-
-
-def get_cobra_r_formula(r, comp=True):
-    if comp:
-        return "{0} <=> {1}".format(
-            " + ".join(
-                ["%s%s[%s](%s)" % (('%g ' % -r.get_coefficient(m)) if r.get_coefficient(m) != -1 else '',
-                                   m.name, m.compartment, m.id) for m in r.reactants]),
-            " + ".join(["%s%s[%s](%s)" % (('%g ' % r.get_coefficient(m)) if r.get_coefficient(m) != 1 else '',
-                                          m.name, m.compartment, m.id) for m in r.products]))
-    else:
-        return "{0} <=> {1}".format(
-            " + ".join(
-                ["%s%s(%s)" % (('%g ' % -r.get_coefficient(m)) if r.get_coefficient(m) != -1 else '',
-                               m.name, m.id) for m in r.reactants]),
-            " + ".join(["%s%s(%s)" % (('%g ' % r.get_coefficient(m)) if r.get_coefficient(m) != 1 else '',
-                                      m.name, m.id) for m in r.products]))
 
 
 def save_model_mappings(source_model, target_model,

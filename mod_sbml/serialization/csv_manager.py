@@ -3,10 +3,10 @@ from collections import defaultdict
 import libsbml
 from pandas import DataFrame
 
-from kegg.kegg_annotator import get_kegg_r_id, get_kegg_m_id
-from reaction_boundary_manager import get_bounds
-from sbml_manager import get_gene_association
-from serialization_manager import get_sbml_r_formula
+from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_r_id, get_kegg_m_id
+from mod_sbml.sbml.reaction_boundary_manager import get_bounds
+from mod_sbml.sbml.sbml_manager import get_gene_association
+from mod_sbml.serialization.serialization_manager import get_sbml_r_formula
 
 __author__ = 'anna'
 
