@@ -287,6 +287,35 @@ class Ontology:
                 equals |= self.get_equivalents(eq_term, rel, direction, relationships, checked)
         return equals
 
+    def get_surroundings(self, t, relationships=None, radius=0, banned=None):
+        banned = {self.get_term(it) for it in banned} if banned else set()
+        result = {t.get_id()}
+        eq_terms = self.get_equivalents(t, None, 0, relationships) - banned
+        result |= {term.get_id() for term in eq_terms}
+        cur_parent_terms = eq_terms | {t}
+        cur_child_terms = cur_parent_terms
+        checked = cur_parent_terms | banned
+        cup = lambda s1, s2: s1 | s2
+        term2eqs = lambda t: ({t} | self.get_equivalents(t, None, 0, relationships)) - banned
+        r = 1
+        while r <= radius and (cur_parent_terms or cur_child_terms):
+            direct_children = \
+                reduce(cup,
+                       (reduce(cup, (term2eqs(self.get_term(t)) for t in self.get_descendants(it.get_id(), True)), set())
+                        for it in cur_parent_terms), set())
+            cur_parent_terms = direct_children - checked
+            checked |= cur_parent_terms
+            result |= {term.get_id() for term in cur_parent_terms}
+            direct_parents = \
+                reduce(cup,
+                       (reduce(cup, (term2eqs(t) for t in self.get_ancestors(it, True)), set())
+                        for it in cur_child_terms), set())
+            cur_child_terms = direct_parents - checked
+            checked |= cur_child_terms
+            result |= {term.get_id() for term in cur_child_terms}
+            r += 1
+        return result
+
     def get_sub_tree(self, t, relationships=None, depth=None):
         return self.get_generalized_descendants(t, False, set(), relationships, depth=depth) \
                | self.get_equivalents(t, None, 0, relationships) | {t}

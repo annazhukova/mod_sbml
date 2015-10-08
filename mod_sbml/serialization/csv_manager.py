@@ -5,15 +5,13 @@ from pandas import DataFrame
 
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_r_id, get_kegg_m_id
 from mod_sbml.sbml.reaction_boundary_manager import get_bounds
-from mod_sbml.sbml.sbml_manager import get_gene_association
+from mod_sbml.sbml.sbml_manager import get_gene_association, get_formulas
 from mod_sbml.serialization.serialization_manager import get_sbml_r_formula
 
 __author__ = 'anna'
 
 
-def serialize_model_info(sbml, prefix):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
+def serialize_model_info(model, prefix):
 
     def to_csv(to_df, name):
         csv = '%s%s.csv' % (prefix, name)
@@ -28,14 +26,21 @@ def df2csv(df, path):
     df.to_csv(path_or_buf=path, na_rep='', sep='\t', index=False)
 
 
-def metabolites2df(model):
+def metabolites2df(model, m_id2chebi_id=None):
     data = []
     index = []
     for m in sorted(model.getListOfSpecies(), key=lambda m: m.id):
         c = model.getCompartment(m.getCompartment())
-        data.append((m.id, m.name, c.id, get_kegg_m_id(m)))
+        formulas = get_formulas(m)
+        data_entry = (m.id, m.name, c.id, get_kegg_m_id(m), formulas.pop() if formulas else None)
+        if m_id2chebi_id:
+            data_entry += (m_id2chebi_id[m.id] if m.id in m_id2chebi_id else None,)
+        data.append(data_entry)
         index.append(m.id)
-    return DataFrame(data=data, index=index, columns=['Id', 'Name', 'Compartment', 'KEGG'])
+    columns = ['Id', 'Name', 'Compartment', 'KEGG', 'Formula']
+    if m_id2chebi_id:
+        columns.append('ChEBI')
+    return DataFrame(data=data, index=index, columns=columns)
 
 
 def compartments2df(model, get_term=None):
