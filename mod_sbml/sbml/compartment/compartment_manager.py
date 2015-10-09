@@ -19,11 +19,15 @@ def separate_boundary_species(model, s_id2chebi):
     :param model: object of libsbml.Model
     :return: void
     """
-    boundary_comp = model.createCompartment()
-    id_ = generate_unique_id(model, BOUNDARY_C_ID)
-    if libsbml.LIBSBML_OPERATION_SUCCESS != boundary_comp.setId(id_):
-        logging.error("Boundary compartment  %s creation error" % id_)
-    boundary_comp.setName(BOUNDARY_C_NAME)
+    b_comp_id = get_boundary_compartment(model)
+    if b_comp_id:
+        boundary_comp = model.getCompartment(b_comp_id)
+    else:
+        boundary_comp = model.createCompartment()
+        id_ = generate_unique_id(model, BOUNDARY_C_ID)
+        if libsbml.LIBSBML_OPERATION_SUCCESS != boundary_comp.setId(id_):
+            logging.error("Boundary compartment  %s creation error" % id_)
+        boundary_comp.setName(BOUNDARY_C_NAME)
 
     chebi2boundary_s_id = {}
     for r in model.getListOfReactions():
@@ -100,6 +104,15 @@ def create_boundary_species_in_boundary_reactions(boundary_comp, chebi2boundary_
                 new_m.setStoichiometry(st)
 
 
+
+def get_boundary_compartment(model):
+    for compartment in model.getListOfCompartments():
+        if compartment.getName() and BOUNDARY_C_NAME.lower() == compartment.getName().lower() \
+                or BOUNDARY_C_ID.lower() == compartment.getId().lower() or 'b' == compartment.getId().lower():
+            return compartment.getId()
+    return None
+
+
 def need_boundary_compartment(model):
     """
     Checks if the model does not contain a Boundary compartment yet but contains at least one reaction
@@ -107,9 +120,9 @@ def need_boundary_compartment(model):
     :param model: object of libsbml.Model
     :return: if the model would benefit from the creation of a boundary compartment
     """
-    for compartment in model.getListOfCompartments():
-        if compartment.getName() and BOUNDARY_C_NAME.lower() == compartment.getName().lower():
-            return False
+    b_comp = get_boundary_compartment(model)
+    if b_comp:
+        return False
     for r in model.getListOfReactions():
         if r.getNumReactants() == 0 or r.getNumProducts() == 0:
             return True
@@ -117,19 +130,4 @@ def need_boundary_compartment(model):
                 and next((it for it in chain(get_reactants(r), get_products(r))
                           if model.getSpecies(it).getBoundaryCondition()), False):
             return True
-        # elements = chain((model.getSpecies(species_ref.getSpecies()) for species_ref in r.getListOfReactants()),
-        #                  (model.getSpecies(species_ref.getSpecies()) for species_ref in r.getListOfProducts()))
-        # chebi_id2ss = defaultdict(list)
-        # for s in elements:
-        #     if not s:
-        #         raise ValueError(
-        #             "Your model includes undeclared metabolites in the reaction %s. Please, fix your model." % r.getid())
-        #     if s.getId() in s_id2chebi:
-        #         chebi_id2ss[s_id2chebi[s.getId()]].append(s)
-        # for ss in chebi_id2ss.itervalues():
-        #     if len(ss) > 1:
-        #         for s_b in (s for s in ss if s.getBoundaryCondition()):
-        #             if next((s for s in ss
-        #                      if not s.getBoundaryCondition() and s_b.getCompartment() == s.getCompartment()), None):
-        #                 return True
     return False
