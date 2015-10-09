@@ -17,19 +17,18 @@ setup(name='mod_sbml',
       author_email='zhutchok@gmail.com',
       version='0.1',
       packages=find_packages(),
-      package_data={'mod_sbml': ['data/*.obo', 'data/*.xlsx', 'data/*.txt']},
+      package_data={'mod_sbml': ['data/*.obo', 'data/*.csv', 'data/*.txt']},
       include_package_data=True,
       license='LICENSE',
       platform=['MacOS', 'Linux', 'Windows'],
       classifiers=[
           'Development Status :: 4 - Beta',
           'Environment :: Console',
-          'Intended Audience :: End Users/Desktop',
           'Intended Audience :: Developers',
           'License :: CeCILL',
           'Topic :: Systems Biology',
           'Topic :: Software Development',
       ],
       download_url='https://github.com/annazhukova/mod_sbml',
-      install_requires=['openpyxl', 'python-libsbml-experimental', 'numpy', 'matplotlib']
+      install_requires=['openpyxl', 'python-libsbml-experimental', 'pandas', 'matplotlib', 'colorsys']
 )

@@ -1,19 +1,21 @@
 import os
+
+from pandas import DataFrame
+
+from mod_sbml.serialization import df2csv, csv2df
+
 try:
     import urllib2
 except:
     pass
 
-import openpyxl
-
-from kegg.pathway_manager import p_id_specific2generic
-from mod_sbml.serialization.xlsx_helper import HEADER_STYLE, add_values, get_info
+from mod_sbml.annotation.kegg.pathway_manager import p_id_specific2generic
 from mod_sbml import annotation
 
-KEGG_REACTION_FILE = \
-    os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'KEGG_reactions.xlsx')
-KEGG_COMPOUND_FILE = \
-    os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'KEGG_compounds.xlsx')
+KEGG_REACTION_FILE_CSV = \
+    os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'KEGG_reactions.csv')
+KEGG_COMPOUND_FILE_CSV = \
+    os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'KEGG_compounds.csv')
 
 
 def get_rns_by_elements(elements):
@@ -114,42 +116,35 @@ def get_kegg_c_info(cpd):
     return names, formula
 
 
-def serialize_reactions(path=KEGG_REACTION_FILE):
-    wb = openpyxl.Workbook()
-    ws = wb.create_sheet(0, "Reactions")
-    add_values(ws, 1, 1, ["Id", "Name", "Definition", "Formula", "EC", "Orthology"], HEADER_STYLE)
-    row = 2
-    rns = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/reaction').read().split("\n") if
-             it.find('rn:') != -1}
+def serialize_reactions_csv(path=KEGG_REACTION_FILE_CSV):
+    data = []
+    index = []
+    rns = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/reaction').read().split("\n")
+           if it.find('rn:') != -1}
     for rn in rns:
-        name, definition, equation, ec, orthology = get_kegg_r_info(rn)
-        add_values(ws, row, 1, [rn.replace('rn:', '').strip(), name, definition, equation, ec, orthology])
-        row += 1
-    wb.save(path)
+        r_id = rn.replace('rn:', '').strip()
+        data.append((r_id,) + get_kegg_r_info(rn))
+        index.append(r_id)
+    df2csv(DataFrame(data=data, index=index, columns=["Id", "Name", "Definition", "Formula", "EC", "Orthology"]), path)
 
 
-def serialize_compounds(path=KEGG_COMPOUND_FILE):
-    wb = openpyxl.Workbook()
-    ws = wb.create_sheet(0, "Compounds")
-    add_values(ws, 1, 1, ["Id", "Name", "Formula"], HEADER_STYLE)
-    row = 2
-    cpds = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/compound').read().split("\n") if
-             it.find('cpd:') != -1}
+def serialize_compounds_csv(path=KEGG_COMPOUND_FILE_CSV):
+    data = []
+    index = []
+    cpds = {it.split('\t')[0] for it in urllib2.urlopen('http://rest.kegg.jp/list/compound').read().split("\n")
+            if it.find('cpd:') != -1}
     for cpd in cpds:
-        names, formula = get_kegg_c_info(cpd)
-        add_values(ws, row, 1, [cpd.replace('cpd:', '').strip(), '; '.join(names), formula])
-        row += 1
-    wb.save(path)
+        c_id = cpd.replace('cpd:', '').strip()
+        data.append((c_id,) + get_kegg_c_info(cpd))
+        index.append(c_id)
+    df2csv(DataFrame(data=data, index=index, columns=["Id", "Name", "Formula"]), path)
 
 
-def get_formula2kegg_compound(path=KEGG_COMPOUND_FILE):
+def get_formula2kegg_compound(path=KEGG_COMPOUND_FILE_CSV):
     formula2kegg = {}
-    # there are following columns: "Id", "Name", "Formula",
-    # but we are only interested in kegg id (1) and formula (3)
-    for (kegg, formula) in get_info(path, [1, 3], 2):
-        if not formula:
-            continue
-        kegg, formula = str(kegg), str(formula)
+    df = csv2df(path)
+    for index, row in df.iterrows():
+        kegg, formula = row['Id'], row['Formula']
         if formula:
             formula2kegg[formula] = kegg
     return formula2kegg
@@ -176,52 +171,48 @@ def get_rs_ps_by_kegg_equation(equation, stoichiometry=False):
     return rs, ps
 
 
-def get_compounds2rn(path=KEGG_REACTION_FILE):
+def get_compounds2rn(path=KEGG_REACTION_FILE_CSV):
     rs_ps2rn = {}
-    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
-    # but we are only interested in kegg id (1) and formula (4)
-    for (kegg, formula) in get_info(path, [1, 4], 2):
-        if not formula:
-            continue
-        kegg, formula = str(kegg), str(formula)
-        rs, ps = get_rs_ps_by_kegg_equation(formula)
-        rs, ps = tuple(sorted(rs)), tuple(sorted(ps))
-        if rs > ps:
-            rs, ps = ps, rs
-        rs_ps2rn[(rs, ps)] = kegg
+    df = csv2df(path)
+    for index, row in df.iterrows():
+        kegg, formula = row['Id'], row['Formula']
+        if formula:
+            rs, ps = get_rs_ps_by_kegg_equation(formula)
+            rs, ps = tuple(sorted(rs)), tuple(sorted(ps))
+            if rs > ps:
+                rs, ps = ps, rs
+            rs_ps2rn[(rs, ps)] = kegg
     return rs_ps2rn
 
 
-def get_rn2kegg_formula(path=KEGG_REACTION_FILE):
+def get_rn2kegg_formula(path=KEGG_REACTION_FILE_CSV):
     rn2formula = {}
-    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
-    # but we are only interested in kegg id(1) and definition (3), i.e. a human-readable formula
-    for (kegg, formula) in get_info(path, [1, 3], 2):
-        if not formula:
-            continue
-        rn2formula[str(kegg)] = str(formula)
+    df = csv2df(path)
+    for index, row in df.iterrows():
+        kegg, formula = row['Id'], row['Formula']
+        if formula:
+            rn2formula[kegg] = formula
     return rn2formula
 
 
-def get_rn2compounds(path=KEGG_REACTION_FILE, stoichiometry=False):
+def get_rn2compounds(path=KEGG_REACTION_FILE_CSV, stoichiometry=False):
     rn2rs_ps = {}
-    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
-    # but we are only interested in kegg id (1) and formula (4)
-    for (kegg, formula) in get_info(path, [1, 4], 2):
-        if not formula:
-            continue
-        kegg, formula = str(kegg), str(formula)
-        rn2rs_ps[kegg] = get_rs_ps_by_kegg_equation(formula, stoichiometry)
+    df = csv2df(path)
+    for index, row in df.iterrows():
+        kegg, formula = row['Id'], row['Formula']
+        if formula:
+            rn2rs_ps[kegg] = get_rs_ps_by_kegg_equation(formula, stoichiometry)
     return rn2rs_ps
 
 
-def get_rn2name(path=KEGG_REACTION_FILE):
+def get_rn2name(path=KEGG_REACTION_FILE_CSV):
     rn2name = {}
-    # there are following columns: "Id", "Name", "Definition", "Formula", "EC", "Orthology",
-    # but we are only interested in kegg id (1) and name (2)
-    for (kegg, name) in get_info(path, [1, 2], 2):
-        rn2name[str(kegg)] = str(name)
+    df = csv2df(path)
+    for index, row in df.iterrows():
+        kegg, name = row['Id'], row['Name']
+        rn2name[kegg] = name
     return rn2name
 
 
-# serialize_compounds()
+serialize_compounds_csv()
+serialize_reactions_csv()

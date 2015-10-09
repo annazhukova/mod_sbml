@@ -20,7 +20,6 @@ def create_subplot(xs, ys_list, legend, x_label, y_label, title, log_x_scale=Fal
                    legend_loc='center left', bb_to_anchor=(1, 0.5), num_colors=0):
     plt.subplot(plot_num)
     n = num_colors if num_colors else len(legend)
-    # colors = (colorsys.hsv_to_rgb(x * 1.0 / n, 0.6 + 0.4 * random(), 0.65 + 0.1 * random()) for x in range(n))
     colors = (colorsys.hsv_to_rgb(0.5, 0, 0.05 + 0.6 * x / n) for x in range(n))
     line_styles = ['-', '--', ':']
     line_widths = [1.0, 1.5, 2.0]
@@ -35,7 +34,6 @@ def create_subplot(xs, ys_list, legend, x_label, y_label, title, log_x_scale=Fal
                  ls=line_styles[i % len(line_styles)], marker=markers[i % len(markers)], markersize=8)
         i += 1
     if legend:
-        # plt.rc('font', **{'sans-serif': 'Arial', 'family': 'sans-serif'})
         plt.legend(legend, fontsize="small", loc=legend_loc, bbox_to_anchor=bb_to_anchor, fancybox=True,
                    framealpha=True, frameon=True, numpoints=1)
     plt.xlabel(x_label)

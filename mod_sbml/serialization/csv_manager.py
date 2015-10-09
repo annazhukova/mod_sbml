@@ -1,12 +1,9 @@
-from collections import defaultdict
-
-import libsbml
 from pandas import DataFrame
 
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_r_id, get_kegg_m_id
 from mod_sbml.sbml.reaction_boundary_manager import get_bounds
 from mod_sbml.sbml.sbml_manager import get_gene_association, get_formulas
-from mod_sbml.serialization.serialization_manager import get_sbml_r_formula
+from mod_sbml.serialization import get_sbml_r_formula, df2csv
 
 __author__ = 'anna'
 
@@ -20,10 +17,6 @@ def serialize_model_info(model, prefix):
 
     return to_csv(compartments2df, 'compartments'), to_csv(metabolites2df, 'metabolites'), \
            to_csv(reactions2df, 'reactions')
-
-
-def df2csv(df, path):
-    df.to_csv(path_or_buf=path, na_rep='', sep='\t', index=False)
 
 
 def metabolites2df(model, m_id2chebi_id=None):
@@ -64,57 +57,7 @@ def reactions2df(model):
                      columns=["Id", "Name", "Lower Bound", "Upper Bound", "Formula", "Kegg", "Gene association"])
 
 
-def serialize_common_part_to_csv(merged_sbml, sbml2id2id, common_ids, sbml2name, prefix):
-    doc = libsbml.SBMLReader().readSBML(merged_sbml)
-    merged_model = doc.getModel()
-    id_sbml2id = defaultdict(list)
-    for sbml, id2id in sbml2id2id.iteritems():
-        for (s_id, t_id) in id2id.iteritems():
-            id_sbml2id[(t_id, sbml)].append(s_id)
-
-    def serialize_common_subpart_to_csv(get_df, suffix):
-        data = []
-        num = 0
-        sbml2df = {}
-
-        for sbml in sbml2id2id.iterkeys():
-            d = libsbml.SBMLReader().readSBML(sbml)
-            model = d.getModel()
-            sbml2df[sbml] = get_df(model)
-
-        df = get_df(merged_model)
-
-        for element in df.values:
-            element_id = element[0]
-            if element_id in common_ids:
-                num += 1
-                data_entry = ['Merged model']
-                data_entry.extend(element)
-                data.append(data_entry)
-                for sbml in sbml2id2id.iterkeys():
-                    if (element_id, sbml) in id_sbml2id:
-                        df = sbml2df[sbml]
-                        for id_ in id_sbml2id[(element_id, sbml)]:
-                            data_entry = [sbml2name[sbml]]
-                            data_entry.extend(df[df.Id == id_].values[0])
-                            data.append(data_entry)
-                data.append([None])
-
-        csv = '%s%s.csv' % (prefix, suffix)
-        columns = ['Model']
-        columns.extend(df.columns)
-        df2csv(DataFrame(data=data, columns=columns), csv)
-
-        return num, csv
-
-    cc_num, comp_csv = serialize_common_subpart_to_csv(compartments2df, 'compartments')
-    cm_num, m_csv = serialize_common_subpart_to_csv(metabolites2df, 'metabolites')
-    cr_num, r_csv = serialize_common_subpart_to_csv(reactions2df, 'reactions')
-
-    return (cc_num, cm_num, cr_num), (comp_csv, m_csv, r_csv)
-
-
-def serialize_common_metabolites_compartments_to_csv(model_id2dfs, model_id2c_id_groups, model_id2m_id_groups,
+def serialize_common_elements_to_csv(model_id2dfs, model_id2c_id_groups, model_id2m_id_groups,
                                                      model_id2r_id_groups, prefix):
 
     def serialize_common_subpart_to_csv(i, model_id2id_groups, suffix):

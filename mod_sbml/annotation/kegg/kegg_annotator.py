@@ -1,13 +1,7 @@
 from collections import defaultdict
 import libsbml
-# from kegg.reaction_manager import get_formula2kegg_compound
-#
-# from mod_sbml.annotation.chebi.chebi_annotator import get_species_to_chebi
-# from mod_sbml.onto.onto_getter import get_chebi
 from mod_sbml.annotation.kegg.pathway_manager import get_relevant_pathway_info
 from mod_sbml.annotation.kegg.reaction_manager import get_compounds2rn
-# from model_comparison.model_matcher import match_ms, match_rs, group_metabolites
-# from mod_sbml.onto.obo_ontology import parse
 from mod_sbml.sbml.sbml_manager import get_reactants, get_products
 from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_annotations, add_annotation
 
@@ -56,21 +50,6 @@ def get_pathway2r_ids(sbml=None, model=None):
                 found = True
         if not found:
             no_pw_r_ids.add(r.getId())
-    # Should find the following pathways:
-    # 1. citrate cycle (TCA cycle) (hsa00020);
-    # 2. fatty acid metabolism (hsa01212) and 3 sub-pathways:
-    #   (a) fatty acid biosynthesis (hsa00061);
-    #   (b) fatty acid elongation (hsa00062);
-    #   (c) fatty acid degradation (hsa00071);
-    # 3. valine, leucine and isoleucine degradation (hsa00280);
-    # 4. synthesis and degradation of ketone bodies (hsa00072).
-
-    # Let's remove the sub-pathways
-    if "path:hsa01212" in pw2r_ids:
-        for key in ("path:hsa00061", "path:hsa00062", "path:hsa00071"):
-            if key in pw2r_ids:
-                del pw2r_ids[key]
-
     return pw2r_ids, no_pw_r_ids
 
 
@@ -90,68 +69,6 @@ def get_kegg_m_id2m_ids(model):
         if k_m_id:
             kegg_m_id2m_ids[k_m_id].add(m.getId())
     return kegg_m_id2m_ids
-
-
-# def annotate_model_with_kegg(model):
-#     chebi = parse(get_chebi())
-#     m_id2chebi = get_species_to_chebi(model, chebi)
-#     formula2kegg = get_formula2kegg_compound()
-#     group2m_ids, m_id2group, group2info = group_metabolites(model, m_id2chebi, chebi, formula2kegg)
-#     for gr, m_ids in group2m_ids.iteritems():
-#         kegg_ids, _, _, _ = group2info[gr]
-#         if not kegg_ids:
-#             continue
-#         kegg = list(kegg_ids)[0].upper()
-#         for m_id in m_ids:
-#             m = model.getSpecies(m_id)
-#             old_kegg = get_kegg_m_id(m)
-#             if not old_kegg:
-#                 add_annotation(m, libsbml.BQB_IS, "http://identifiers.org/kegg.compound/%s" % kegg)
-#
-#     infer_reaction_kegg_from_compounds_kegg(model)
-
-
-# def copy_m_kegg_annotations(model, template_model):
-#     chebi = parse(get_chebi())
-#     m_id2chebi = get_species_to_chebi(model, chebi)
-#     t_m_id2chebi = get_species_to_chebi(template_model, chebi)
-#     m_id2group, t_m_id2group, m_i2i, m_group2info, t_m_group2info, group2m_ids, _ = \
-#         match_ms(model, template_model, m_id2chebi, t_m_id2chebi, chebi)
-#
-#     for i, m_ids in group2m_ids.iteritems():
-#         kegg_ids, _, _, _ = m_group2info[i]
-#         if not kegg_ids and i in m_i2i:
-#             kegg_ids, _, _, _ = t_m_group2info[m_i2i[i]]
-#         if not kegg_ids:
-#             continue
-#         kegg = list(kegg_ids)[0].upper()
-#         for m_id in m_ids:
-#             m = model.getSpecies(m_id)
-#             old_kegg = get_kegg_m_id(m)
-#             if not old_kegg:
-#                 add_annotation(m, libsbml.BQB_IS, "http://identifiers.org/kegg.compound/%s" % kegg)
-#
-#     return m_i2i, m_id2group, t_m_id2group
-
-
-# def copy_kegg_annotations(model, template_model):
-#     m_i2i, m_id2group, t_m_id2group = copy_m_kegg_annotations(model, template_model)
-#
-#     r_id2group, t_r_id2group, r_i2i, r_group2info, t_r_group2info, group2r_ids, _ = \
-#         match_rs(model, template_model, m_id2group, t_m_id2group, m_i2i)
-#
-#     for i, r_ids in group2r_ids.iteritems():
-#         kegg_ids, _ = r_group2info[i]
-#         if not kegg_ids and i in r_i2i:
-#             kegg_ids, _ = t_r_group2info[r_i2i[i]]
-#         if not kegg_ids:
-#             continue
-#         kegg = list(kegg_ids)[0].upper()
-#         for r_id in r_ids:
-#             r = model.getReaction(r_id)
-#             old_kegg = get_kegg_r_id(r)
-#             if not old_kegg:
-#                 add_annotation(r, libsbml.BQB_IS, "http://identifiers.org/kegg.reaction/%s" % kegg)
 
 
 def annotate_with_pathways(org, model, kegg_r_ids, kegg_r_id2r_ids, threshold=0.5):
