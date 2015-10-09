@@ -1,6 +1,9 @@
+import logging
+
 try:
     import urllib2
 except:
+    logging.error('Some of the functionality might not be available. Install urllib2 package to have it.')
     pass
 
 ORG_HUMAN = "hsa"

@@ -9,5 +9,7 @@ that include:
  - model serialization to csv format [https://en.wikipedia.org/wiki/Comma-separated_values];
  - submodel extraction.
  
+mod_sbml also includes utilities for parsing ontologies in OBO flat file format [https://github.com/owlcollab/oboformat].
+ 
 mod_sbml uses the libsbml package [http://sbml.org/Software/libSBML] for manipulation of SBML files.
 

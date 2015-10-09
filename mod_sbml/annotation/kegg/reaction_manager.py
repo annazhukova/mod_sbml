@@ -1,3 +1,4 @@
+import logging
 import os
 
 from pandas import DataFrame
@@ -7,6 +8,7 @@ from mod_sbml.serialization import df2csv, csv2df
 try:
     import urllib2
 except:
+    logging.error('Some of the functionality might not be available. Install urllib2 package to have it.')
     pass
 
 from mod_sbml.annotation.kegg.pathway_manager import p_id_specific2generic
