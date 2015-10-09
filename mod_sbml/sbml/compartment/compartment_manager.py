@@ -104,7 +104,6 @@ def create_boundary_species_in_boundary_reactions(boundary_comp, chebi2boundary_
                 new_m.setStoichiometry(st)
 
 
-
 def get_boundary_compartment(model):
     for compartment in model.getListOfCompartments():
         if compartment.getName() and BOUNDARY_C_NAME.lower() == compartment.getName().lower() \

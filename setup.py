@@ -19,16 +19,17 @@ setup(name='mod_sbml',
       packages=find_packages(),
       package_data={'mod_sbml': ['data/*.obo', 'data/*.csv', 'data/*.txt']},
       include_package_data=True,
-      license='LICENSE',
       platform=['MacOS', 'Linux', 'Windows'],
       classifiers=[
           'Development Status :: 4 - Beta',
           'Environment :: Console',
           'Intended Audience :: Developers',
-          'License :: CeCILL',
+          'License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)L',
           'Topic :: Systems Biology',
           'Topic :: Software Development',
       ],
       download_url='https://github.com/annazhukova/mod_sbml',
+      url='https://github.com/annazhukova/mod_sbml',
       install_requires=['openpyxl', 'python-libsbml-experimental', 'pandas', 'matplotlib', 'colorsys']
-)
+      )
+
