@@ -216,5 +216,5 @@ def get_rn2name(path=KEGG_REACTION_FILE_CSV):
     return rn2name
 
 
-serialize_compounds_csv()
-serialize_reactions_csv()
+# serialize_compounds_csv()
+# serialize_reactions_csv()
