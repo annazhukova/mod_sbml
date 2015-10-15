@@ -17,7 +17,7 @@ def get_sbml_r_formula(model, r, show_compartments=True, show_metabolite_ids=Tru
         "%g " % st if st != 1 else "",
         format_m_name(model.getSpecies(m_id), model, show_compartments, show_metabolite_ids))
     formula = " + ".join([format_m(m_id, st) for (m_id, st) in get_reactants(r, True)]) + \
-              (" <=> " if r.getReversible() else "-->") + \
+              (" <=> " if r.getReversible() else " --> ") + \
               " + ".join([format_m(m_id, st) for (m_id, st) in get_products(r, True)])
     return formula
 
