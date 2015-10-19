@@ -276,7 +276,7 @@ def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
     return r_ids
 
 
-def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=None):
+def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=None, kegg_id=None):
     new_r_id = generate_unique_id(model, id_=id_)
     new_r = model.createReaction()
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_r.setId(new_r_id):
@@ -292,6 +292,8 @@ def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=Non
         sr = new_r.createProduct()
         sr.setSpecies(m_id)
         sr.setStoichiometry(st)
+    if kegg_id:
+        add_annotation(new_r, libsbml.BQB_IS, "http://identifiers.org/kegg.reaction/%s" % kegg_id.upper())
     return new_r
 
 

@@ -23,9 +23,8 @@ def metabolites2df(model, m_id2chebi_id=None):
     data = []
     index = []
     for m in sorted(model.getListOfSpecies(), key=lambda m: m.id):
-        c = model.getCompartment(m.getCompartment())
         formulas = get_formulas(m)
-        data_entry = (m.id, m.name, c.id, get_kegg_m_id(m), formulas.pop() if formulas else None)
+        data_entry = (m.id, m.name, m.getCompartment(), get_kegg_m_id(m), formulas.pop() if formulas else None)
         if m_id2chebi_id:
             data_entry += (m_id2chebi_id[m.id] if m.id in m_id2chebi_id else None,)
         data.append(data_entry)

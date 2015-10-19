@@ -2,12 +2,10 @@ from collections import defaultdict
 from itertools import chain
 import logging
 
-import libsbml
-
-from mod_sbml.sbml.sbml_manager import generate_unique_id, get_products, create_species, get_reactants, create_reaction
+from mod_sbml.sbml.sbml_manager import get_products, create_species, get_reactants, create_reaction, \
+    create_compartment
 
 BOUNDARY_C_NAME = 'Boundary'
-
 BOUNDARY_C_ID = 'Boundary'
 
 __author__ = 'anna'
@@ -19,15 +17,7 @@ def separate_boundary_species(model, s_id2chebi):
     :param model: object of libsbml.Model
     :return: void
     """
-    b_comp_id = get_boundary_compartment(model)
-    if b_comp_id:
-        boundary_comp = model.getCompartment(b_comp_id)
-    else:
-        boundary_comp = model.createCompartment()
-        id_ = generate_unique_id(model, BOUNDARY_C_ID)
-        if libsbml.LIBSBML_OPERATION_SUCCESS != boundary_comp.setId(id_):
-            logging.error("Boundary compartment  %s creation error" % id_)
-        boundary_comp.setName(BOUNDARY_C_NAME)
+    boundary_comp = create_boundary_compartment_if_needed(model)
 
     chebi2boundary_s_id = {}
     for r in model.getListOfReactions():
@@ -61,10 +51,21 @@ def separate_boundary_species(model, s_id2chebi):
                                 name='Exchange %s' % (s.getName() if s.getName() else s_id),
                                 reversible=True, id_='%s_exchange' % s_id)
                 s.setBoundaryCondition(False)
-    create_boundary_species_in_boundary_reactions(boundary_comp, chebi2boundary_s_id, model, s_id2chebi)
+    create_boundary_species_in_boundary_reactions(model, s_id2chebi, chebi2boundary_s_id, boundary_comp)
 
 
-def create_boundary_species_in_boundary_reactions(boundary_comp, chebi2boundary_s_id, model, s_id2chebi):
+def create_boundary_compartment_if_needed(model):
+    boundary_comp = get_boundary_compartment(model)
+    if boundary_comp:
+        return boundary_comp
+    return create_compartment(model, name=BOUNDARY_C_NAME, id_=BOUNDARY_C_ID)
+
+
+def create_boundary_species_in_boundary_reactions(model, s_id2chebi, chebi2boundary_s_id=None, boundary_comp=None):
+    if not boundary_comp:
+        boundary_comp = create_boundary_compartment_if_needed(model)
+    if not chebi2boundary_s_id:
+        chebi2boundary_s_id = {}
     for r in model.getListOfReactions():
         if r.getNumReactants() == 0:
             for s_id, st in get_products(r, stoichiometry=True):
@@ -108,7 +109,7 @@ def get_boundary_compartment(model):
     for compartment in model.getListOfCompartments():
         if compartment.getName() and BOUNDARY_C_NAME.lower() == compartment.getName().lower() \
                 or BOUNDARY_C_ID.lower() == compartment.getId().lower() or 'b' == compartment.getId().lower():
-            return compartment.getId()
+            return compartment
     return None
 
 
