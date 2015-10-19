@@ -167,7 +167,8 @@ def get_r_comps(r_id, model):
     return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=True)}
 
 
-def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None):
+def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None, kegg_id=None,
+                   chebi_id=None):
     new_species = model.createSpecies()
     id_ = generate_unique_id(model, id_ if id_ else "s")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
@@ -179,6 +180,10 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None, type
         new_species.setSpeciesType(type_id)
     new_species.setSBOTerm(sbo_id if sbo_id else SBO_MATERIAL_ENTITY)
     new_species.setBoundaryCondition(bound)
+    if kegg_id:
+        add_annotation(new_species, libsbml.BQB_IS, "http://identifiers.org/kegg.compound/%s" % kegg_id.upper())
+    if chebi_id:
+        add_annotation(new_species, libsbml.BQB_IS, "http://identifiers.org/obo.chebi/%s" % chebi_id.upper())
     return new_species
 
 

@@ -10,8 +10,8 @@ def remove_from_map(mp, key, value):
             del mp[key]
 
 
-def invert_map(key2value):
-    value2keys = defaultdict(set)
+def invert_map(key2value, factory=set):
+    value2keys = defaultdict(factory)
     for key, value in key2value.iteritems():
         if isinstance(value, list) or isinstance(value, set):
             for v in value:
