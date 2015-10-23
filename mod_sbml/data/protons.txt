@@ -1,1 +1,1 @@
-chebi:15378	chebi:5584	chebi:10744	chebi:13357
+chebi:15378	chebi:5584	chebi:10744	chebi:13357	chebi:15378
