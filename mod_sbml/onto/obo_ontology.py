@@ -192,7 +192,7 @@ class Ontology:
         if direct:
             return result
         for child_id in self.parent2children[term_id]:
-            result |= self.get_descendants(child_id, direct)
+            result |= self.get_descendants(child_id, False)
         return result
 
     def is_a(self, child_id, parent_id):

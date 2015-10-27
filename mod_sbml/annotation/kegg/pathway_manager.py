@@ -62,6 +62,16 @@ def get_pw_by_organism(org):
     return pw2name
 
 
+def get_name2pw(org='map'):
+    name2pw = {}
+    pathways = urllib2.urlopen('http://rest.kegg.jp/list/pathway/%s' % org).read()
+    for line in pathways.split("\n"):
+        if line.find("path:") != -1:
+            pw, p_name = line.split("\t")
+            name2pw[p_name.lower().strip()] = pw[len('path:'):]
+    return name2pw
+
+
 def get_relevant_pathway_info(org, rns, threshold=0):
     pw2name = get_pw_by_organism(org)
     pws = get_pw_by_reactions(rns, org)

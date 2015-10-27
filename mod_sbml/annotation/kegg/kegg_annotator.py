@@ -45,8 +45,8 @@ def get_pathway2r_ids(sbml=None, model=None):
     for r in model.getListOfReactions():
         found = False
         for annotation in get_annotations(r, libsbml.BQB_IS_PART_OF):
-            if annotation.find("kegg.pathway") != -1:
-                pw2r_ids[annotation.replace("kegg.pathway:", '')].add(r.getId())
+            if annotation.find("path:") != -1:
+                pw2r_ids[annotation.replace("path:", '')].add(r.getId())
                 found = True
         if not found:
             no_pw_r_ids.add(r.getId())
@@ -81,7 +81,7 @@ def annotate_with_pathways(org, model, kegg_r_ids, kegg_r_id2r_ids, threshold=0.
                 r = model.getElementBySId(r_id)
                 if r:
                     add_annotation(r, libsbml.BQB_IS_PART_OF, "http://identifiers.org/kegg.pathway/%s" % pw)
-                    r.appendNotes("<html:body><html:p>SUBSYSTEM: {1} ({0})</html:p></html:body>".format(pw, name))
+                    r.appendNotes("<html:body><html:p>SUBSYSTEM: %s</html:p></html:body>" % name)
 
 
 def infer_reaction_kegg_from_compounds_kegg(model):

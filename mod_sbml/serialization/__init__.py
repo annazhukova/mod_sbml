@@ -4,12 +4,12 @@ from mod_sbml.sbml.sbml_manager import get_reactants, get_products
 __author__ = 'anna'
 
 
-def df2csv(df, path):
-    df.to_csv(path_or_buf=path, na_rep='', sep='\t', index=False)
+def df2csv(df, path, sep='\t'):
+    df.to_csv(path_or_buf=path, na_rep='', sep=sep, index=False)
 
 
-def csv2df(path):
-    return DataFrame.from_csv(path, sep='\t', index_col=0)
+def csv2df(path, sep='\t'):
+    return DataFrame.from_csv(path, sep=sep, index_col=0)
 
 
 def get_sbml_r_formula(model, r, show_compartments=True, show_metabolite_ids=True):
