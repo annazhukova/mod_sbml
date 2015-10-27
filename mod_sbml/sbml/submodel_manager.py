@@ -35,25 +35,6 @@ def remove_unused_compartments(model):
         model.removeCompartment(c_id)
 
 
-def specific_metabolite_model(model, cofactor_m_ids=None):
-    if not cofactor_m_ids:
-        ub_ch_ids = get_ubiquitous_chebi_ids(add_common=True, add_cofactors=True)
-        cofactor_m_ids = select_metabolite_ids_by_term_ids(model, ub_ch_ids)
-    r_ids_to_remove = []
-    for r in model.getListOfReactions():
-        for m_id in set(get_reactants(r)) & cofactor_m_ids:
-            r.removeReactant(m_id)
-        for m_id in set(get_products(r)) & cofactor_m_ids:
-            r.removeProduct(m_id)
-        if not r.getNumProducts() and not r.getNumReactants():
-            r_ids_to_remove.append(r.id)
-    for r_id in r_ids_to_remove:
-        model.removeReaction(r_id)
-    for m_id in cofactor_m_ids:
-        model.removeSpecies(m_id)
-    remove_unused_compartments(model)
-
-
 def biomassless_model(model):
     biomass_r_ids = get_biomass_r_ids(model)
     r_ids_to_keep = {reaction.getId() for reaction in model.getListOfReactions()

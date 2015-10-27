@@ -1,8 +1,9 @@
 from pandas import DataFrame
-
+from mod_sbml.annotation.chebi.chebi_annotator import get_chebi_id
+from mod_sbml.annotation.gene_ontology.go_annotator import get_go_id
 from mod_sbml.annotation.kegg.kegg_annotator import get_kegg_r_id, get_kegg_m_id
 from mod_sbml.sbml.reaction_boundary_manager import get_bounds
-from mod_sbml.sbml.sbml_manager import get_gene_association, get_formulas
+from mod_sbml.sbml.sbml_manager import get_gene_association, get_formulas, get_pathway_expression
 from mod_sbml.serialization import get_sbml_r_formula, df2csv
 
 __author__ = 'anna'
@@ -19,30 +20,25 @@ def serialize_model_info(model, prefix):
            to_csv(reactions2df, 'reactions')
 
 
-def metabolites2df(model, m_id2chebi_id=None):
+def metabolites2df(model):
     data = []
     index = []
     for m in sorted(model.getListOfSpecies(), key=lambda m: m.id):
         formulas = get_formulas(m)
-        data_entry = (m.id, m.name, m.getCompartment(), get_kegg_m_id(m), formulas.pop() if formulas else None)
-        if m_id2chebi_id:
-            data_entry += (m_id2chebi_id[m.id] if m.id in m_id2chebi_id else None,)
-        data.append(data_entry)
+        data.append(
+            (m.id, m.name, m.getCompartment(), formulas.pop() if formulas else None, get_kegg_m_id(m), get_chebi_id(m)))
         index.append(m.id)
-    columns = ['Id', 'Name', 'Compartment', 'KEGG', 'Formula']
-    if m_id2chebi_id:
-        columns.append('ChEBI')
+    columns = ['Id', 'Name', 'Compartment', 'Formula', 'KEGG', 'ChEBI']
     return DataFrame(data=data, index=index, columns=columns)
 
 
-def compartments2df(model, get_term=None):
+def compartments2df(model):
     data = []
     index = []
     for c in sorted(model.getListOfCompartments(), key=lambda c: c.id):
-        data_piece = (c.id, c.name, get_term(c)) if get_term else (c.id, c.name)
-        data.append(data_piece)
+        data.append((c.id, c.name, get_go_id(c)))
         index.append(c.id)
-    return DataFrame(data=data, index=index, columns=['Id', 'Name', "GO"] if get_term else ['Id', 'Name'])
+    return DataFrame(data=data, index=index, columns=['Id', 'Name', "GO"])
 
 
 def reactions2df(model):
@@ -50,10 +46,10 @@ def reactions2df(model):
     index = []
     for r in sorted(model.getListOfReactions(), key=lambda r: r.id):
         data.append((r.id, r.name, get_bounds(r)[0], get_bounds(r)[1], get_sbml_r_formula(model, r, False),
-                     get_kegg_r_id(r), get_gene_association(r)))
+                     get_kegg_r_id(r), get_gene_association(r), ','.join(get_pathway_expression(r))))
         index.append(r.id)
     return DataFrame(data=data, index=index,
-                     columns=["Id", "Name", "Lower Bound", "Upper Bound", "Formula", "Kegg", "Gene association"])
+                     columns=["Id", "Name", "Lower Bound", "Upper Bound", "Formula", "KEGG", "Gene association", "Subsystems"])
 
 
 def serialize_common_elements_to_csv(model_id2dfs, model_id2c_id_groups, model_id2m_id_groups,

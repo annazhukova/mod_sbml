@@ -271,6 +271,8 @@ class Ontology:
         return [1 + i for i in level]
 
     def get_equivalents(self, term, rel=None, direction=0, relationships=None, checked=None):
+        if not term:
+            return set()
         term_id = term.get_id()
         if checked is None:
             checked = set()

@@ -1,11 +1,10 @@
-from collections import defaultdict
+from itertools import chain
+import re
 
 import libsbml
 
-from mod_sbml.annotation.miriam_converter import to_identifiers_org_format
 from mod_sbml.sbml.sbml_manager import get_formulas
-from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_is_vo_annotations, get_annotations, \
-    add_annotation
+from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_is_vo_annotations, add_annotation
 
 __author__ = 'anna'
 
@@ -21,133 +20,76 @@ MOLECULAR_ENTITY = 'chebi:23367'
 
 CHEBI_PREFIX = "obo.chebi"
 
+CHEBI_ID_PATTERN = "[cC][Hh][Ee][Bb][Ii]\:\d+"
+
 
 def get_chebi_id(m):
-    for annotation in get_annotations(m, libsbml.BQB_IS):
-        if annotation.lower().find("chebi") != -1:
-            return annotation.lower().replace("obo.chebi:", '').replace("chebi:chebi:", 'chebi:')
+    for annotation in chain(get_is_annotations(m), get_is_vo_annotations(m)):
+        for chebi_id in re.findall(CHEBI_ID_PATTERN, annotation):
+            return chebi_id.lower()
     return None
 
 
-def get_term(entity, chebi):
-    for is_annotation in get_is_annotations(entity):
-        term = chebi.get_term(is_annotation, check_only_ids=False)
-        if term:
-            return term
-    for is_vo_annotation in get_is_vo_annotations(entity):
-        term = chebi.get_term(is_vo_annotation, check_only_ids=False)
+def get_chebi_term_by_annotation(entity, chebi):
+    for annotation in chain(get_is_annotations(entity), get_is_vo_annotations(entity)):
+        term = chebi.get_term(annotation, check_only_ids=False)
         if term:
             return term
     return None
 
 
-def normalize(name):
-    return name.strip()
-
-
-def get_names(entity):
-    name = normalize(entity.getName())
-    name_bis = name
-    end = name_bis.find("(")
-    if end != -1 and end != 0:
-        name_bis = name_bis[0:end].strip()
-    return name, name_bis
-
-
-def get_species_term(species, chebi, model):
-    term = get_term(species, chebi)
-    if not term:
-        s_type_id = species.getSpeciesType()
+def infer_chebi_term(m, chebi, model=None):
+    term = get_chebi_term_by_annotation(m, chebi)
+    if term:
+        return term
+    names = []
+    if model:
+        s_type_id = m.getSpeciesType()
         if s_type_id:
             s_type = model.getSpeciesType(s_type_id)
             if s_type:
-                term = get_term(s_type, chebi)
-    return term
+                term = get_chebi_term_by_annotation(s_type, chebi)
+                if term:
+                    return term
+                names.append(s_type.getName())
 
-
-def find_term_id(entity, chebi):
-    term = get_term(entity, chebi)
-    if term:
-        return term.get_id()
-
-    for formula in get_formulas(entity):
+    for formula in get_formulas(m):
         if formula and formula != '.':
             term = chebi.get_term(formula, check_only_ids=False)
             if term:
-                return term.get_id()
+                return term
+    name = m.getName()
+    names.append(name)
+    if name and model:
+        c = model.getCompartment(m.getCompartment())
+        if c:
+            c_name = c.getName() if c.getName() else c.getId()
+            name = name.replace('[%s]' % c_name, '').replace(c_name, '').strip()
+            names.append(name)
+    for name in names:
+        if name:
+            term = chebi.get_term(name, check_only_ids=False)
+            if term:
+                return term
     return None
 
 
-def get_species_to_chebi(model, chebi, guess=True):
-    species2chebi = {}
-    s_type_id2chebi = {}
-    unannotated = []
+def annotate_metabolites(model, chebi):
+    for m in model.getListOfSpecies():
+        if get_chebi_id(m):
+            continue
+        term = infer_chebi_term(m, chebi, model)
+        if term:
+            add_annotation(m, libsbml.BQB_IS, term.get_id(), CHEBI_PREFIX)
 
-    # process species types
-    for s_type in model.getListOfSpeciesTypes():
-        t_id = find_term_id(s_type, chebi)
-        if t_id:
-            if not next((annotation for annotation in get_is_annotations(s_type) if annotation.find('chebi') != -1),
-                         False):
-                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
-            s_type_id2chebi[s_type.getId()] = t_id
 
-    # process species
-    for species in model.getListOfSpecies():
-        s_type_id = species.getSpeciesType()
-        if s_type_id and s_type_id in s_type_id2chebi:
-            t_id = s_type_id2chebi[s_type_id]
-        else:
-            t_id = find_term_id(species, chebi)
-        if t_id:
-            species2chebi[species.getId()] = t_id
-            if not next((annotation for annotation in get_is_annotations(species) if annotation.find('chebi') != -1),
-                        False):
-                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
-            if s_type_id and s_type_id not in s_type_id2chebi:
-                s_type_id2chebi[s_type_id] = t_id
-                add_annotation(model.getSpeciesType(s_type_id), libsbml.BQB_IS,
-                               to_identifiers_org_format(t_id, CHEBI_PREFIX))
-        else:
-            unannotated.append(species)
-
-    s_t_id2unannotated = defaultdict(list)
-    for species in unannotated:
-        s_type_id = species.getSpeciesType()
-        if s_type_id and s_type_id in s_type_id2chebi:
-            t_id = s_type_id2chebi[s_type_id]
-            species2chebi[species.getId()] = t_id
-            add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
-        else:
-            if s_type_id:
-                s_t_id2unannotated[s_type_id].append(species)
-            else:
-                s_t_id2unannotated[species.getId()].append(species)
-
-    # annotate unannotated
-    if guess:
-        for s_t_id, species_list in s_t_id2unannotated.iteritems():
-            s_type = model.getSpeciesType(s_t_id)
-            name = ''
-            if s_type:
-                name = normalize(s_type.getName())
-            for species in species_list:
-                if name:
-                    break
-                c_name = normalize("[{0}]".format(model.getCompartment(species.getCompartment()).getName()))
-                name = normalize(species.getName()).replace(c_name, '').strip()
-            if not name:
-                continue
-            term = chebi.get_term(name, check_only_ids=False)
-            if not term:
-                continue
-            t_id = term.get_id()
-            for species in species_list:
-                species2chebi[species.getId()] = t_id
-                add_annotation(species, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
-            if s_type:
-                add_annotation(s_type, libsbml.BQB_IS, to_identifiers_org_format(t_id, CHEBI_PREFIX))
-    return species2chebi
+def get_species_id2chebi_id(model):
+    s_id2chebi_id = {}
+    for s in model.getListOfSpecies():
+        chebi_id = get_chebi_id(s)
+        if chebi_id:
+            s_id2chebi_id[s.getId()] = chebi_id
+    return s_id2chebi_id
 
 
 def get_cofactor_ids(onto):

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import os
 
@@ -11,7 +12,6 @@ except:
     logging.error('Some of the functionality might not be available. Install urllib2 package to have it.')
     pass
 
-from mod_sbml.annotation.kegg.pathway_manager import p_id_specific2generic
 from mod_sbml import annotation
 
 KEGG_REACTION_FILE_CSV = \
@@ -20,53 +20,13 @@ KEGG_COMPOUND_FILE_CSV = \
     os.path.join(os.path.dirname(os.path.abspath(annotation.__file__)), '..', 'data', 'KEGG_compounds.csv')
 
 
-def get_rns_by_elements(elements):
-    rns = set()
-    reactions_by_compounds = urllib2.urlopen(
-        'http://rest.kegg.jp/link/reaction/%s' % "+".join(elements)).read()
-    for line in reactions_by_compounds.split("\n"):
-        if line.find("rn:") != -1:
-            _, rn = line.split("\t")
-            rns.add(rn)
-    return rns
-
-
 def get_compounds_by_rn(rn):
     compounds_by_reaction = urllib2.urlopen('http://rest.kegg.jp/link/compound/%s' % rn).read()
     return {c for c in {c.replace("%s\t" % rn, '').strip() for c in compounds_by_reaction.split("\n")} if
             c.find('cpd:') != -1}
 
 
-def get_compounds_by_rp(rp):
-    compounds_by_rp = urllib2.urlopen('http://rest.kegg.jp/link/compound/%s' % rp).read()
-    return {c for c in {c.replace("%s\t" % rp, '').strip() for c in compounds_by_rp.split("\n")} if
-            c.find('cpd:') != -1}
-
-
-def get_rpairs_by_rn(rn):
-    rpairs_by_reaction = urllib2.urlopen('http://rest.kegg.jp/link/rpair/%s' % rn).read()
-    return {c for c in {c.replace("%s\t" % rn, '').strip() for c in rpairs_by_reaction.split("\n")} if
-            c.find('rp:') != -1}
-
-
-def get_rpairs_by_compounds(compounds):
-    rpairs_by_compounds = urllib2.urlopen('http://rest.kegg.jp/link/rpair/%s' % '+'.join(compounds)).read()
-    rpairs = set()
-    for line in rpairs_by_compounds.split("\n"):
-        if line.find("rp:") != -1:
-            _, rp = line.split("\t")
-            rpairs.add(rp)
-    return rpairs
-
-
-def get_pw_name(org, pw):
-    result = urllib2.urlopen('http://rest.kegg.jp/find/pathway/%s' % p_id_specific2generic(org, pw)).read()
-    result = result.replace("\n", '')
-    pw, pw_name = result.split('\t')
-    return pw_name
-
-
-def get_rns():
+def get_rn2formula():
     rn2formula = {}
     reactions = urllib2.urlopen('http://rest.kegg.jp/list/reaction').read()
     for line in reactions.split("\n"):
@@ -76,24 +36,31 @@ def get_rns():
     return rn2formula
 
 
+def get_cps2rn():
+    cps2rn = defaultdict(set)
+    reactions = urllib2.urlopen('http://rest.kegg.jp/list/reaction').read()
+    for line in reactions.split("\n"):
+        if line.find("rn:") != -1:
+            rn, r_formula = line.split("\t")
+            cps = get_compounds_by_rn(rn)
+            cps2rn[tuple(sorted(cps))].add(rn)
+    print len([rns for rns in cps2rn.itervalues() if len(rns) > 1])
+
+
 def get_kegg_r_info(rn):
-    name, definition, equation, ec, orthology = '', '', '', '', ''
+    name, equation, ec = '', '', ''
     try:
         reactions = urllib2.urlopen('http://rest.kegg.jp/get/%s' % rn).read()
         for line in reactions.split("\n"):
-            if line.find("DEFINITION") != -1:
-                definition = line.replace("DEFINITION", '').strip()
-            elif line.find("NAME") != -1:
+            if line.find("NAME") != -1:
                 name = line.replace("NAME", '').strip()
             elif line.find("EQUATION") != -1:
                 equation = line.replace("EQUATION", '').strip()
             elif line.find("ENZYME") != -1:
                 ec = line.replace("ENZYME", '').strip()
-            elif line.find("ORTHOLOGY") != -1:
-                orthology = line.replace("ORTHOLOGY", '').strip()
     except:
         pass
-    return name, definition, equation, ec, orthology
+    return name, equation, ec
 
 
 def get_kegg_c_info(cpd):
@@ -127,7 +94,7 @@ def serialize_reactions_csv(path=KEGG_REACTION_FILE_CSV):
         r_id = rn.replace('rn:', '').strip()
         data.append((r_id,) + get_kegg_r_info(rn))
         index.append(r_id)
-    df2csv(DataFrame(data=data, index=index, columns=["Id", "Name", "Definition", "Formula", "EC", "Orthology"]), path)
+    df2csv(DataFrame(data=data, index=index, columns=["Id", "Name", "Formula", "EC"]), path)
 
 
 def serialize_compounds_csv(path=KEGG_COMPOUND_FILE_CSV):
@@ -216,5 +183,15 @@ def get_rn2name(path=KEGG_REACTION_FILE_CSV):
     return rn2name
 
 
-# serialize_compounds_csv()
-# serialize_reactions_csv()
+def get_kegg_r_id_by_kegg_m_ids(kegg_m_ids):
+    kegg_r_ids = None
+    for m_id in kegg_m_ids:
+        rs = {it.replace('cpd:%s' % m_id, '').strip()
+              for it in urllib2.urlopen('http://rest.kegg.jp/link/reaction/cpd:%s' % m_id).read().split("\n") if it}
+        if kegg_r_ids is None:
+            kegg_r_ids = rs
+        else:
+            kegg_r_ids &= rs
+            if not kegg_r_ids:
+                break
+    return {it.replace('rn:', '') for it in kegg_r_ids} if kegg_r_ids else {}

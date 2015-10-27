@@ -8,6 +8,7 @@ except:
 
 ORG_HUMAN = "hsa"
 ORG_SACE = "sce"
+GENERIC = "map"
 
 
 def p_id_specific2generic(org, pw):
@@ -80,7 +81,7 @@ def get_relevant_pathway_info(org, rns, threshold=0):
 
     for generic_pw in pws:
         pw = p_id_generic2specific(org, generic_pw)
-        if not pw in pw2name:
+        if pw not in pw2name:
             continue
         pw_rs = get_reactions_by_pw(org, generic_pw)
         if not pw_rs:

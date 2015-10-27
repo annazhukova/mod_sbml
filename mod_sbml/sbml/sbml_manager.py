@@ -4,9 +4,6 @@ import os
 
 import libsbml
 
-from mod_sbml.annotation.miriam_converter import to_identifiers_org_format
-from mod_sbml.annotation.rdf_annotation_helper import get_qualifier_values, add_annotation
-
 SBO_MATERIAL_ENTITY = "SBO:0000240"
 
 __author__ = 'anna'
@@ -117,15 +114,6 @@ def get_subsystem(reaction):
     return result
 
 
-def get_taxonomy(model):
-    occurs_in = get_qualifier_values(model, libsbml.BQB_OCCURS_IN)
-    for it in occurs_in:
-        start = it.find("taxonomy")
-        if start != -1:
-            return it[start + len("taxonomy:"):].strip()
-    return None
-
-
 def copy_sbml(sbml_in, sbml_out):
     input_doc = libsbml.SBMLReader().readSBML(sbml_in)
     libsbml.SBMLWriter().writeSBMLToFile(input_doc, sbml_out)
@@ -177,8 +165,7 @@ def get_r_comps(r_id, model):
     return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=True)}
 
 
-def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None, kegg_id=None,
-                   chebi_id=None):
+def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None):
     new_species = model.createSpecies()
     id_ = generate_unique_id(model, id_ if id_ else "s")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
@@ -190,14 +177,10 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None, type
         new_species.setSpeciesType(type_id)
     new_species.setSBOTerm(sbo_id if sbo_id else SBO_MATERIAL_ENTITY)
     new_species.setBoundaryCondition(bound)
-    if kegg_id:
-        add_annotation(new_species, libsbml.BQB_IS, "http://identifiers.org/kegg.compound/%s" % kegg_id.upper())
-    if chebi_id:
-        add_annotation(new_species, libsbml.BQB_IS, "http://identifiers.org/obo.chebi/%s" % chebi_id.upper())
     return new_species
 
 
-def create_compartment(model, name=None, outside=None, term_id=None, id_=None):
+def create_compartment(model, name=None, outside=None, id_=None):
     new_comp = model.createCompartment()
     id_ = generate_unique_id(model, id_ if id_ else "c")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_comp.setId(id_):
@@ -206,8 +189,6 @@ def create_compartment(model, name=None, outside=None, term_id=None, id_=None):
         new_comp.setName(name)
     if outside:
         new_comp.setOutside(outside)
-    if term_id:
-        add_annotation(new_comp, libsbml.BQB_IS, to_identifiers_org_format(term_id, "obo.go"))
     return new_comp
 
 
@@ -286,7 +267,7 @@ def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
     return r_ids
 
 
-def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=None, kegg_id=None):
+def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=None):
     new_r_id = generate_unique_id(model, id_=id_)
     new_r = model.createReaction()
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_r.setId(new_r_id):
@@ -302,8 +283,6 @@ def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=Non
         sr = new_r.createProduct()
         sr.setSpecies(m_id)
         sr.setStoichiometry(st)
-    if kegg_id:
-        add_annotation(new_r, libsbml.BQB_IS, "http://identifiers.org/kegg.reaction/%s" % kegg_id.upper())
     return new_r
 
 

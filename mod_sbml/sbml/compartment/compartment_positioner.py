@@ -1,4 +1,4 @@
-from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, get_is_vo_annotations
+from mod_sbml.annotation.gene_ontology.go_annotator import get_go_id
 
 GO_CYTOPLASM = 'go:0005737'
 GO_CYTOSOL = 'go:0005829'
@@ -23,41 +23,6 @@ isAorPartOf = lambda t_id, onto, candidate_ids: {it for it in candidate_ids if
                                                  isACheck(it, t_id, onto) or partOfCheck(it, t_id, onto)}
 
 
-def get_go_term(comp, onto):
-    """
-    Find a Gene Ontology term for a compartment of interest,
-    using its annotations or name.
-    :param comp: libSBML Compartment
-    :param onto: the Gene Ontology
-    :return: term if it was found otherwise None
-    """
-    for is_annotation in get_is_annotations(comp):
-        term = onto.get_term(is_annotation, check_only_ids=False)
-        if term:
-            return term
-    for is_vo_annotation in get_is_vo_annotations(comp):
-        term = onto.get_term(is_vo_annotation, check_only_ids=False)
-        if term:
-            return term
-    return onto.get_term(comp.getName() if comp.getName() else comp.getId(), check_only_ids=False)
-
-
-def get_comp2go(model, onto):
-    """
-    Map compartments in the model to the Gene Ontology terms,
-    using annotations in the model and compartment names.
-    :param model: libSBML Model
-    :param onto: the Gene Ontology
-    :return: dict: comp_id -> go_term_id
-    """
-    comp2go = {}
-    for comp in model.getListOfCompartments():
-        term = get_go_term(comp, onto)
-        if term:
-            comp2go[comp.getId()] = term.get_id()
-    return comp2go
-
-
 def comp2level(model, onto):
     """
     Calculates levels of compartments in a given model, where 0 level corresponds to the outmost compartment(s),
@@ -74,9 +39,9 @@ def comp2level(model, onto):
     if not outs_are_set:
         term_id2comp_id = {}
         for comp in model.getListOfCompartments():
-            term = get_go_term(comp, onto)
-            if term:
-                term_id2comp_id[term.get_id()] = comp.getId()
+            t_id = get_go_id(comp)
+            if t_id:
+                term_id2comp_id[t_id] = comp.getId()
         in2out = nest_compartments_with_gene_ontology(set(term_id2comp_id.iterkeys()), onto)
         for in_t_id, out_t_id in in2out.iteritems():
             if out_t_id:
