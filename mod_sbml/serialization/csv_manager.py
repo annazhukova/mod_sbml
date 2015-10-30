@@ -41,10 +41,11 @@ def compartments2df(model):
     return DataFrame(data=data, index=index, columns=['Id', 'Name', "GO"])
 
 
-def reactions2df(model):
+def reactions2df(model, r_ids=None):
     data = []
     index = []
-    for r in sorted(model.getListOfReactions(), key=lambda r: r.id):
+    rs = model.getListOfReactions() if not r_ids else (r for r in model.getListOfReactions() if r.id in r_ids)
+    for r in sorted(rs, key=lambda r: r.id):
         data.append((r.id, r.name, get_bounds(r)[0], get_bounds(r)[1], get_sbml_r_formula(model, r, False),
                      get_kegg_r_id(r), get_gene_association(r), ','.join(get_pathway_expression(r))))
         index.append(r.id)

@@ -8,7 +8,7 @@ from mod_sbml.annotation.chebi.chebi_annotator import get_chebi_id
 from mod_sbml.annotation.kegg.pathway_manager import get_relevant_pathway_info
 from mod_sbml.annotation.kegg.reaction_manager import get_compounds2rn, get_kegg_r_id_by_kegg_m_ids
 from mod_sbml.sbml.sbml_manager import get_reactants, get_products, get_subsystem2r_ids
-from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, add_annotation
+from mod_sbml.annotation.rdf_annotation_helper import get_is_annotations, add_annotation, get_annotations
 
 KEGG_REACTION_PREFIX = "kegg.reaction"
 
@@ -70,7 +70,7 @@ def get_pathway2r_ids(sbml=None, model=None):
         model = input_doc.getModel()
     for r in model.getListOfReactions():
         found = False
-        for annotation in get_is_annotations(r):
+        for annotation in get_annotations(r, libsbml.BQB_IS_PART_OF):
             if annotation.find("path:") != -1:
                 pw2r_ids[annotation.replace("path:", '')].add(r.getId())
                 found = True

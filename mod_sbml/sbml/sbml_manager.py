@@ -17,13 +17,14 @@ PATHWAY_PREFIX = "SUBSYSTEM:"
 FORMULA_PREFIX = "FORMULA:"
 
 
-def get_model_name(sbml):
-    doc = libsbml.SBMLReader().readSBML(sbml)
-    model = doc.getModel()
+def get_model_name(sbml=None, model=None):
+    if not model:
+        doc = libsbml.SBMLReader().readSBML(sbml)
+        model = doc.getModel()
     model_name = model.getName() if model.getName() else model.getId()
     if not model_name or not model_name.strip():
         return os.path.splitext(os.path.basename(sbml))[0]
-    return model_name.strip()
+    return model_name.replace('_', ' ').strip()
 
 
 def _get_prefixed_notes_value(notes, result, prefix):
