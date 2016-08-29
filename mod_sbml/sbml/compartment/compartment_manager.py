@@ -12,9 +12,16 @@ BOUNDARY_C_ID = 'Boundary'
 __author__ = 'anna'
 
 
-def separate_boundary_species(model):
+def separate_boundary_metabolites(model):
     """
-    Creates a boundary compartment with the id 'Boundary' and moves the boundary species there.
+    Creates a boundary compartment with the id 'Boundary' and moves the boundary metabolites there.
+
+    For reactions involving several metabolites with the same chebi_id, one of which is marked as in boundary condition,
+    moves it to the boundary compartment.
+    For reactions with no reactants or no products, creates them in the boundary compartment.
+    For reactions happening in a non-boundary compartment(s) and involving a metabolite in a boundary condition,
+    adds an exchange reaction for this metabolite: metabolite <-> metabolite_bound
+
     :param model: object of libsbml.Model
     :return: void
     """
@@ -29,9 +36,11 @@ def separate_boundary_species(model):
             chebi_id = get_chebi_id(s)
             if chebi_id:
                 chebi_id2ss[chebi_id].append(s)
-        for s in (s for s in chain(rs, ps) if s.getBoundaryCondition()):
+        for s in (s for s in chain(rs, ps) if s.getBoundaryCondition() and boundary_comp.getId() != s.getCompartment()):
             s_id = s.getId()
             chebi_id = get_chebi_id(s)
+            # Suppose we have several species in the same compartment with the same ChEBI id,
+            # and one of them is marked as in boundary condition, then we move it to the boundary compartment
             if chebi_id and len(chebi_id2ss[chebi_id]) > 1 \
                     and len({it.getCompartment() for it in chebi_id2ss[chebi_id]}) == 1:
                 s.setCompartment(boundary_comp.getId())
@@ -49,11 +58,11 @@ def separate_boundary_species(model):
                                        id_='%s_b' % s.getId(), type_id=s.getSpeciesType(),
                                        sbo_id=s.getSBOTerm()).getId()
                     key2boundary_s_id[chebi_id] = boundary_s_id
-                create_reaction(model, {boundary_s_id: 1}, {s_id: 1},
-                                name='Exchange %s' % (s.getName() if s.getName() else s_id),
-                                reversible=True, id_='%s_exchange' % s_id)
-                s.setBoundaryCondition(False)
-    create_boundary_species_in_boundary_reactions(model, key2boundary_s_id, boundary_comp)
+                    create_reaction(model, {boundary_s_id: 1}, {s_id: 1},
+                                    name='Exchange %s' % (s.getName() if s.getName() else s_id),
+                                    reversible=True, id_='%s_exchange' % s_id)
+                    s.setBoundaryCondition(False)
+    create_boundary_metabolites_in_boundary_reactions(model, key2boundary_s_id, boundary_comp)
 
 
 def create_boundary_compartment_if_needed(model):
@@ -63,7 +72,7 @@ def create_boundary_compartment_if_needed(model):
     return create_compartment(model, name=BOUNDARY_C_NAME, id_=BOUNDARY_C_ID)
 
 
-def create_boundary_species_in_boundary_reactions(model, key2boundary_s_id=None, boundary_comp=None):
+def create_boundary_metabolites_in_boundary_reactions(model, key2boundary_s_id=None, boundary_comp=None):
     if not boundary_comp:
         boundary_comp = create_boundary_compartment_if_needed(model)
     if not key2boundary_s_id:
@@ -113,8 +122,11 @@ def create_boundary_species_in_boundary_reactions(model, key2boundary_s_id=None,
 
 def get_boundary_compartment(model):
     for compartment in model.getListOfCompartments():
-        if compartment.getName() and BOUNDARY_C_NAME.lower() == compartment.getName().lower() \
-                or BOUNDARY_C_ID.lower() == compartment.getId().lower() or 'b' == compartment.getId().lower():
+        c_name = compartment.getName()
+        if c_name:
+            c_name = c_name.lower().strip()
+        c_id = compartment.getId().lower().strip()
+        if c_name in [BOUNDARY_C_NAME.lower(), 'b'] or c_id in [BOUNDARY_C_ID.lower(), 'b']:
             return compartment
     return None
 
