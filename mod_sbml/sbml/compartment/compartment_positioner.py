@@ -77,17 +77,13 @@ def comp2level(model, onto):
     return c_id2level
 
 
-def classify_cellular_components(t_ids, onto):
+def extract_organelle_t_ids(t_ids, onto):
     """
-    Classifies cellular components using the Gene Ontology
-    :param t_ids: the Gene Ontology term ids to be classified
+    Filters the terms to select organelles and their parts
+    :param t_ids: the Gene Ontology term ids to be filtered
     :param onto: the Gene Ontology
-    :return: dict that maps compartment_id to outside_compartment_id
+    :return: dict that maps organelle term_id to ids of its parts
     """
-
-    # cell
-    inside_cell = isAorPartOf(GO_CELL, onto, t_ids)
-
     # organelles and their parts
     organelle_parts = partOf(GO_ORGANELLE, onto, t_ids) | partOf(GO_NUCLEUS, onto, t_ids) \
                       | partOf(GO_LIPID_PARTICLE, onto, t_ids)
@@ -96,9 +92,6 @@ def classify_cellular_components(t_ids, onto):
     organelles = isA(GO_ORGANELLE, onto, not_org_parts) | isA(GO_NUCLEUS, onto, not_org_parts) | \
                  isA(GO_LIPID_PARTICLE, onto, not_org_parts)
     organelle_parts |= organelles
-
-    inside_cell |= organelle_parts
-    outside_cell = t_ids - inside_cell
 
     organelle2parts = {it: set() for it in organelles}
     organelle_parts_wo_organelle = []
@@ -120,7 +113,21 @@ def classify_cellular_components(t_ids, onto):
                 # (*) add an additional organelle
                 organelle2parts[organelle] = {it}
 
-    # extracellular
+    return organelle2parts
+
+
+def classify_cellular_components(t_ids, onto):
+    """
+    Classifies cellular components using the Gene Ontology
+    :param t_ids: the Gene Ontology term ids to be classified
+    :param onto: the Gene Ontology
+    :return: dict that maps compartment_id to outside_compartment_id
+    """
+
+    inside_cell = isAorPartOf(GO_CELL, onto, t_ids)
+    organelle2parts = extract_organelle_t_ids(t_ids, onto)
+    inside_cell |= reduce(lambda a, b: a | b, organelle2parts.itervalues(), set(organelle2parts.iterkeys()))
+    outside_cell = t_ids - inside_cell
     extracellular = isAorPartOf(GO_EXTRACELLULAR, onto, outside_cell)
 
     return organelle2parts, extracellular, inside_cell, outside_cell
