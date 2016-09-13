@@ -1,3 +1,5 @@
+import os
+
 __author__ = 'anna'
 
 from setuptools import setup, find_packages
@@ -17,7 +19,8 @@ setup(name='mod_sbml',
       author_email='zhutchok@gmail.com',
       version='0.1.1',
       packages=find_packages(),
-      package_data={'mod_sbml': ['data/*.obo', 'data/*.csv', 'data/*.txt']},
+      package_data={'mod_sbml': [os.path.join('data', '*.obo'), os.path.join('data', '*.csv'),
+                                 os.path.join('data', '*.txt')]},
       include_package_data=True,
       platform=['MacOS', 'Linux', 'Windows'],
       classifiers=[
