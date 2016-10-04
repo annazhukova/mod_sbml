@@ -85,6 +85,7 @@ def serialize_proton_terms():
         f.write('\t'.join(proton_ch_ids))
 
 
-# serialize_sub_chebi()
-# serialize_ubiquitous_terms()
-# serialize_proton_terms()
+if __name__ == "__main__":
+    serialize_sub_chebi()
+    serialize_ubiquitous_terms()
+    serialize_proton_terms()

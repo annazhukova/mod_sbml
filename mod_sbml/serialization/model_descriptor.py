@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+import libsbml
+
 from mod_sbml.annotation.kegg.pathway_manager import get_pw_name
 from mod_sbml.annotation.kegg.kegg_annotator import get_pathway2r_ids
 from mod_sbml.sbml.sbml_manager import get_metabolites, get_subsystem2r_ids, \
@@ -67,3 +69,19 @@ def model_statistics(model, org, pathways=True, extracellular=None):
             pw_names.append(pw)
         print ("Pathways", sorted(pw_names))
 
+
+if __name__ == "__main__":
+
+    # parameter parsing #
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Prints information about the SBML model.")
+    parser.add_argument('--model', required=True, type=str, help="input model in SBML format")
+    parser.add_argument('--org', default='map', type=str, help="model organism")
+    params = parser.parse_args()
+
+    reader = libsbml.SBMLReader()
+    doc = reader.readSBML(params.model)
+    model = doc.getModel()
+
+    model_statistics(model, params.org, pathways=True, extracellular=None)
