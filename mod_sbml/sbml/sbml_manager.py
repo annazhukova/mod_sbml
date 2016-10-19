@@ -3,6 +3,11 @@ import logging
 import os
 
 import libsbml
+import pyparsing as pp
+
+OR = ["OR", "or", "Or"]
+
+AND = ["AND", "and", "And"]
 
 SBO_MATERIAL_ENTITY = "SBO:0000240"
 
@@ -37,7 +42,7 @@ def _get_prefixed_notes_value(notes, result, prefix):
             start = note.find(prefix)
             if start != -1:
                 start += len(prefix)
-                result.add(note[start:len(note)].strip())
+                result.add(note[start:].strip())
         _get_prefixed_notes_value(child, result, prefix)
 
 
@@ -48,32 +53,162 @@ def get_ec_numbers(reaction):
     return result
 
 
-def get_gene_association(reaction):
+def _remove_duplicates(expression, flatten=False):
+    if not isinstance(expression, list):
+        return expression
+    if len(expression) % 2 == 0:
+        raise ValueError("The expression was supposed to be in a form [i_1, op, i_2, op, ... op, i_n], "
+                         "got even number of elements instead")
+    genes = {_remove_duplicates(it, flatten=flatten) for it in expression[::2]}
+    if len(genes) == 1:
+        return genes.pop()
+
+    operand = expression[1]
+    result = []
+    for gene in genes:
+        result.append(gene)
+        result.append(operand)
+    return '(%s)' % ' '.join(result[: -1]) if flatten else tuple(result[: -1])
+
+
+def _filter(expression, allowed_values, flatten=False):
+    if not isinstance(expression, list):
+        return expression if expression in allowed_values else None
+    if len(expression) % 2 == 0:
+        raise ValueError("The expression was supposed to be in a form [i_1, op, i_2, op, ... op, i_n], "
+                         "got even number of elements instead")
+    genes = {_filter(it, allowed_values, flatten) for it in expression[::2]}
+    if not genes:
+        return None
+
+    if len(genes) == 1:
+        return genes.pop()
+
+    operand = expression[1]
+    filtered_genes = [gene for gene in genes if gene is not None]
+
+    if operand in AND and len(filtered_genes) < len(genes):
+        return None
+
+    result = []
+    for gene in filtered_genes:
+        result.append(gene)
+        result.append(operand)
+    return '(%s)' % ' '.join(result[: -1]) if flatten else tuple(result[: -1])
+
+
+
+def parse_gene_association(ga, gene_parse_action=None, flatten=True):
+    if not ga:
+        return ga
+
+    gene = pp.Word(initChars=pp.alphanums + "_.-")
+
+    if gene_parse_action:
+        gene = gene.setParseAction(gene_parse_action)
+
+    and_op = pp.oneOf(AND)
+    or_op = pp.oneOf(OR)
+
+    expr = pp.operatorPrecedence(gene, [
+        (and_op, 2, pp.opAssoc.LEFT,),
+        (or_op, 2, pp.opAssoc.LEFT,)
+    ])
+
+    res = expr.parseString(ga, parseAll=True).asList()
+    while len(res) == 1:
+        res = res[0]
+    return _remove_duplicates(res, flatten=flatten)
+
+
+def get_gene_association(reaction, gene_parse_action=None, flatten=True, allowed_genes=None):
+    """
+    Extracts gene association encoded as a note prefixed with GENE_ASSOCIATION:.
+    :param allowed_genes: if allowed_genes are specified the resulting gene association will be filtered
+    to only contain them
+    :param reaction: the reaction of interest (libsbml.Reaction)
+    :param gene_parse_action: if you need to do something with the genes, e.g. convert them to a different format,
+    add it as a gene parse action. The gene parse action takes a term as an input (the gene value is term[0])
+    and returns the new value as an output. For example, if you have a function entrez2symbol that
+    converts ENTREZ gene ID to SYMBOL, specify gene_parse_action as lambda term: entrez2symbol(term[0]).
+    If gene_parse_action is None (default), no modification to the genes is made.
+    :param flatten: whether to return the gene association as a string (True), e.g. '((3906 and 2683) or 8704)',
+    or as a list (False), e.g. [['3906', 'and', '2683'], 'or', '8704'].
+    :return: the gene association as a string (if flatten is True), e.g. '((3906 and 2683) or 8704)',
+    or as a list (if flatten is False), e.g. [['3906', 'and', '2683'], 'or', '8704'].
+    """
     result = set()
     node = reaction.getNotes()
     _get_prefixed_notes_value(node, result, GA_PREFIX)
     if result:
-        return result.pop()
+        try:
+            return parse_gene_association(result.pop(), gene_parse_action=gene_parse_action, flatten=flatten)
+        except pp.ParseBaseException as e:
+            logging.error('Ignoring the gene association for %s as it is malformed: %s' % (reaction.getId(), e.message))
     return ''
 
 
+def _remove_note_containing_text_of_interest(node, text):
+    if not node:
+        return False
+    to_remove = []
+    for i in xrange(0, node.getNumChildren()):
+        child = node.getChild(i)
+        note = child.getCharacters()
+        if note and text in note \
+                or _remove_note_containing_text_of_interest(child, text) and 0 == child.getNumChildren():
+            to_remove.append(i)
+
+    for i in reversed(to_remove):
+        node.removeChild(i)
+    return len(to_remove) > 0
+
+
+def _get_nodes_of_type(node, type):
+    if node:
+        if node.isStart() and type in node.getName():
+            yield node
+        for i in xrange(0, node.getNumChildren()):
+            for res in _get_nodes_of_type(node.getChild(i), type):
+                yield res
+
+
+def set_gene_association(reaction, gene_association):
+    """Sets the reaction gene association. (The old gene association will be overwritten)
+    """
+    remove_gene_association(reaction)
+
+    if not gene_association:
+        return
+    # Do not forget to convert s to str as if it is for example in Unicode, libsbml will complain
+    s = str('<p>GENE_ASSOCIATION: %s</p>' % gene_association)
+
+    body = next(_get_nodes_of_type(reaction.getNotes(), 'body'), None)
+    if body:
+        body.addChild(libsbml.XMLNode_convertStringToXMLNode(s))
+    else:
+        reaction.appendNotes("<body>%s</body>" % s)
+
+
+def remove_gene_association(reaction):
+    """Removes the reaction gene association.
+    """
+    _remove_note_containing_text_of_interest(reaction.getNotes(), GA_PREFIX)
+
+
 def get_genes(reaction):
-    return gene_association2genes(get_gene_association(reaction))
+    """
+    Extracts a set of genes from the gene association encoded as a note prefixed with GENE_ASSOCIATION:.
+    :param reaction: the reaction of interest (libsbml.Reaction)
+    :return: a set of genes of interest.
+    """
+    genes = set()
 
+    def gene_parse_action(t):
+        genes.add(t[0])
+        return t[0]
 
-def gene_association2genes(gene_association):
-    genes = []
-    if gene_association:
-        for g0 in gene_association.split('('):
-            for g1 in g0.split(')'):
-                for g2 in g1.split('and'):
-                    for g3 in g2.split('or'):
-                        for g4 in g3.split('xor'):
-                            for g5 in g4.split('not'):
-                                g5 = g5.replace(' ', '')
-                                if g5:
-                                    genes.append(g5)
-    genes.sort()
+    get_gene_association(reaction, gene_parse_action=gene_parse_action, flatten=False)
     return genes
 
 
@@ -258,12 +393,12 @@ def get_pathway_by_species(s_ids, model, ubiquitous_s_ids, blocked_r_ids=None):
         for r_id in r_ids_to_add:
             s_ids_to_process |= (r_id2s_ids[r_id] - s_ids_processed)
 
-    for s in sorted((model.getSpecies(s_id) for s_id in s_ids_processed), key=lambda s: s.name):
-        print(s.name, s.id, len(s_id2r_ids[s.id]))
-
-    print("________________________________________")
-    for s in sorted((model.getSpecies(s_id) for s_id in ubiquitous_s_ids), key=lambda s: s.name):
-        print(s.name, s.id)
+    # for s in sorted((model.getSpecies(s_id) for s_id in s_ids_processed), key=lambda s: s.name):
+    #     print(s.name, s.id, len(s_id2r_ids[s.id]))
+    #
+    # print("________________________________________")
+    # for s in sorted((model.getSpecies(s_id) for s_id in ubiquitous_s_ids), key=lambda s: s.name):
+    #     print(s.name, s.id)
 
     return r_ids
 

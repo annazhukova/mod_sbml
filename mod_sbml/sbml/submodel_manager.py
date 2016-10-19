@@ -1,8 +1,6 @@
 from collections import Counter
 
 from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products, get_modifiers
-from mod_sbml.sbml.ubiquitous_manager import get_ubiquitous_chebi_ids, \
-    select_metabolite_ids_by_term_ids
 
 __author__ = 'anna'
 
@@ -14,10 +12,10 @@ def submodel(r_ids_to_keep, model):
     remove_unused_compartments(model)
 
 
-def remove_unused_species(model):
+def remove_unused_species(model, keep_modifiers=False):
     s_ids_to_keep = set()
     for r in model.getListOfReactions():
-        s_ids_to_keep |= get_metabolites(r, include_modifiers=True)
+        s_ids_to_keep |= get_metabolites(r, include_modifiers=keep_modifiers)
     for s_id in [s.id for s in model.getListOfSpecies() if s.id not in s_ids_to_keep]:
         model.removeSpecies(s_id)
 

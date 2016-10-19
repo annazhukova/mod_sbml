@@ -62,7 +62,8 @@ def get_annotation_term_of_type(element, qualifier_type):
     if cv_terms:
         for i in xrange(cv_terms.getSize()):
             term = cv_terms.get(i)
-            if libsbml.BIOLOGICAL_QUALIFIER == term.getQualifierType() and qualifier_type == term.getBiologicalQualifierType():
+            if libsbml.BIOLOGICAL_QUALIFIER == term.getQualifierType() \
+                    and qualifier_type == term.getBiologicalQualifierType():
                 yield term
 
 

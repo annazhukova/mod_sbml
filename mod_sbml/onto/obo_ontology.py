@@ -14,7 +14,7 @@ def normalize(name):
     return ''.join(e for e in name if e.isalnum()).lower()
 
 
-class Ontology:
+class Ontology(object):
     def __init__(self):
         self.roots = set()
         self.id2term = {}
