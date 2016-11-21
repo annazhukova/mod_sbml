@@ -61,13 +61,10 @@ def model_statistics(model, org, pathways=True, extracellular=None):
         pw2r_ids, o_r_ids = get_pathway2r_ids(model=model)
         if not pw2r_ids.keys():
             pw2r_ids, o_r_ids = get_subsystem2r_ids(model=model)
-        pw_names = []
-        for pw in pw2r_ids.keys():
-            pw_name = get_pw_name(org, pw)
-            if pw_name:
-                pw = "%s (%s)" % (pw_name, pw)
-            pw_names.append(pw)
-        print ("Pathways", sorted(pw_names))
+        print("-----------------Pathways----------------------")
+        for pw, r_ids in sorted(pw2r_ids.iteritems(), key=lambda it: it[0]):
+            print ('%s\t%d' % (pw, len(r_ids)))
+        print ('No pathway\t%d' % (len(o_r_ids)))
 
 
 if __name__ == "__main__":
