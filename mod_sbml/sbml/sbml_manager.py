@@ -72,30 +72,29 @@ def _remove_duplicates(expression, flatten=False):
 
 
 def _filter(expression, allowed_values, flatten=False):
-    if not isinstance(expression, list):
+    if not allowed_values:
+        return expression
+    if not isinstance(expression, tuple):
         return expression if expression in allowed_values else None
     if len(expression) % 2 == 0:
         raise ValueError("The expression was supposed to be in a form [i_1, op, i_2, op, ... op, i_n], "
                          "got even number of elements instead")
     genes = {_filter(it, allowed_values, flatten) for it in expression[::2]}
-    if not genes:
-        return None
-
-    if len(genes) == 1:
-        return genes.pop()
 
     operand = expression[1]
     filtered_genes = [gene for gene in genes if gene is not None]
 
-    if operand in AND and len(filtered_genes) < len(genes):
+    if operand in AND and len(filtered_genes) < len(genes) or not filtered_genes:
         return None
+
+    if len(filtered_genes) == 1:
+        return genes.pop()
 
     result = []
     for gene in filtered_genes:
         result.append(gene)
         result.append(operand)
     return '(%s)' % ' '.join(result[: -1]) if flatten else tuple(result[: -1])
-
 
 
 def parse_gene_association(ga, gene_parse_action=None, flatten=True):
@@ -135,16 +134,24 @@ def get_gene_association(reaction, gene_parse_action=None, flatten=True, allowed
     :param flatten: whether to return the gene association as a string (True), e.g. '((3906 and 2683) or 8704)',
     or as a list (False), e.g. [['3906', 'and', '2683'], 'or', '8704'].
     :return: the gene association as a string (if flatten is True), e.g. '((3906 and 2683) or 8704)',
-    or as a list (if flatten is False), e.g. [['3906', 'and', '2683'], 'or', '8704'].
+    or as a list (if flatten is False), e.g. [['3906', 'and', '2683'], 'or', '8704']; empty for spontaneous reactions;
+    or None if there was a parsing problem or if the needed genes are not present among the allowed ones.
     """
     result = set()
     node = reaction.getNotes()
     _get_prefixed_notes_value(node, result, GA_PREFIX)
     if result:
+        ga = result.pop()
         try:
-            return parse_gene_association(result.pop(), gene_parse_action=gene_parse_action, flatten=flatten)
+            ga = parse_gene_association(ga, gene_parse_action=gene_parse_action,
+                                        flatten=False if allowed_genes else flatten)
+            if ga and allowed_genes:
+                f_ga = _filter(ga, allowed_genes, flatten=flatten)
+                return f_ga if f_ga else None
+            return ga
         except pp.ParseBaseException as e:
-            logging.error('Ignoring the gene association for %s as it is malformed: %s' % (reaction.getId(), e.message))
+            logging.error('Ignoring the gene association for %s as it is malformed: %s' % (reaction.getId(), ga))
+            return None
     return ''
 
 
@@ -187,7 +194,8 @@ def set_gene_association(reaction, gene_association):
     if body:
         body.addChild(libsbml.XMLNode_convertStringToXMLNode(s))
     else:
-        reaction.appendNotes("<body>%s</body>" % s)
+        reaction.setNotes(libsbml.XMLNode_convertStringToXMLNode(
+            str("<body xmlns='http://www.w3.org/1999/xhtml'>%s</body>" % s)))
 
 
 def remove_gene_association(reaction):
@@ -216,6 +224,7 @@ def get_pathway_expression(reaction):
     result = set()
     node = reaction.getNotes()
     _get_prefixed_notes_value(node, result, PATHWAY_PREFIX)
+    _get_prefixed_notes_value(node, result, "Pathway:")
     return result
 
 
@@ -298,7 +307,7 @@ def get_metabolites(reaction, stoichiometry=False, include_modifiers=False):
 
 def get_r_comps(r_id, model):
     r = model.getReaction(r_id)
-    return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=True)}
+    return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=False)}
 
 
 def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None):

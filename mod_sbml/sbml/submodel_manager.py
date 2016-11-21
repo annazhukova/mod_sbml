@@ -1,8 +1,48 @@
 from collections import Counter
 
-from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products, get_modifiers
+from mod_sbml.sbml.sbml_manager import get_metabolites, get_reactants, get_products, get_modifiers, \
+    get_gene_association, set_gene_association
 
 __author__ = 'anna'
+
+
+def submodel_by_genes(model, genes_of_interest, keep_spontaneous_reactions=True):
+    """
+    Creates a submodel based on genes of interest. Reaction are kept
+    if their gene associations can be satisfied only with the genes_of_interest.
+    :param keep_spontaneous_reactions: whether the reactions that have no gene associations should be kept
+    :param model: libsbml.Model
+    :param genes_of_interest: a collection of genes of interest (must be in the same notation as in the model)
+    :return:
+    """
+    r_ids = []
+    spontaneous_r_ids = []
+    for r in model.getListOfReactions():
+        ga = get_gene_association(r, flatten=True, allowed_genes=genes_of_interest)
+        if ga:
+            r_ids.append(r.getId())
+            set_gene_association(r, ga)
+        elif ga is not None and keep_spontaneous_reactions:
+            spontaneous_r_ids.append(r.getId())
+
+    if spontaneous_r_ids:
+        updated = True
+        while updated:
+            updated = False
+            s_ids = set()
+            for r in (model.getReaction(r_id) for r_id in r_ids):
+                s_ids |= get_metabolites(r)
+
+            for r in (model.getReaction(r_id) for r_id in spontaneous_r_ids):
+                rs, ps = set(get_reactants(r)), set(get_products(r))
+                if rs and rs == rs & s_ids or ps and ps == ps & s_ids:
+                    r_ids.append(r.getId())
+                    n = len(s_ids)
+                    s_ids |= rs | ps
+                    if len(s_ids) > n:
+                        updated = True
+
+    submodel(r_ids, model)
 
 
 def submodel(r_ids_to_keep, model):
