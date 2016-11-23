@@ -1,4 +1,5 @@
 import os
+from functools import reduce
 
 from mod_sbml.annotation.chebi.chebi_annotator import EQUIVALENT_RELATIONSHIPS, MOLECULAR_ENTITY, HAS_ROLE_RELATIONSHIP, \
     add_equivalent_chebi_ids, get_cofactor_ids

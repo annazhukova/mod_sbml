@@ -80,7 +80,7 @@ class Term:
         return set(self.xrefs[db]) if db else set()
 
     def get_dbs(self):
-        return set(self.xrefs.iterkeys())
+        return set(self.xrefs.keys())
 
     def __from_string(self, s):
         if not s:
@@ -108,7 +108,7 @@ class Term:
                                                        '\t'.join(self.parent_ids),
                                                        ';\t;'.join(
                                                            ('%s\t%s' % (db, '\t'.join(values))
-                                                            for (db, values) in self.xrefs.iteritems())))
+                                                            for (db, values) in self.xrefs.items())))
 
     def __eq__(self, other):
         if not other or not isinstance(other, Term):

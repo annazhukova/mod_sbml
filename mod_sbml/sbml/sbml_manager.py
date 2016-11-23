@@ -35,7 +35,7 @@ def get_model_name(sbml=None, model=None):
 def _get_prefixed_notes_value(notes, result, prefix):
     if not notes:
         return
-    for i in xrange(0, notes.getNumChildren()):
+    for i in range(0, notes.getNumChildren()):
         child = notes.getChild(i)
         note = child.getCharacters()
         if note:
@@ -159,7 +159,7 @@ def _remove_note_containing_text_of_interest(node, text):
     if not node:
         return False
     to_remove = []
-    for i in xrange(0, node.getNumChildren()):
+    for i in range(0, node.getNumChildren()):
         child = node.getChild(i)
         note = child.getCharacters()
         if note and text in note \
@@ -175,7 +175,7 @@ def _get_nodes_of_type(node, type):
     if node:
         if node.isStart() and type in node.getName():
             yield node
-        for i in xrange(0, node.getNumChildren()):
+        for i in range(0, node.getNumChildren()):
             for res in _get_nodes_of_type(node.getChild(i), type):
                 yield res
 
@@ -328,8 +328,9 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None, type
 def create_compartment(model, name=None, outside=None, id_=None):
     new_comp = model.createCompartment()
     id_ = generate_unique_id(model, id_ if id_ else "c")
-    if libsbml.LIBSBML_OPERATION_SUCCESS != new_comp.setId(id_):
-        logging.error("compartment %s creation error" % id_)
+    res = new_comp.setId(id_)
+    if libsbml.LIBSBML_OPERATION_SUCCESS != res:
+        logging.error("compartment %s creation error: %d" % (id_, res))
     if name:
         new_comp.setName(name)
     if outside:
@@ -357,8 +358,9 @@ def generate_unique_id(model, id_=None, i=0):
         id_ = 's_'
     else:
         id_ = ''.join(e for e in id_ if e.isalnum() or '_' == e)
-        if id_[0].isdigit() or '_' == id_[0]:
+        if not id_[0].isalpha():
             id_ = 's_' + id_
+        id_ = id_.encode('ascii', errors='ignore').decode()
     if not model.getElementBySId(id_):
         return id_
     while model.getElementBySId("%s%d" % (id_, i)):
@@ -420,11 +422,11 @@ def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=Non
     if name:
         new_r.setName(name)
     new_r.setReversible(reversible)
-    for m_id, st in r_id2st.iteritems():
+    for m_id, st in r_id2st.items():
         sr = new_r.createReactant()
         sr.setSpecies(m_id)
         sr.setStoichiometry(st)
-    for m_id, st in p_id2st.iteritems():
+    for m_id, st in p_id2st.items():
         sr = new_r.createProduct()
         sr.setSpecies(m_id)
         sr.setStoichiometry(st)

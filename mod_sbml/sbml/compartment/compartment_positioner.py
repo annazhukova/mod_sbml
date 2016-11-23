@@ -1,3 +1,5 @@
+from functools import reduce
+
 from mod_sbml.annotation.gene_ontology.go_annotator import get_go_id
 
 GO_CYTOPLASM = 'go:0005737'
@@ -42,8 +44,8 @@ def comp2level(model, onto):
             t_id = get_go_id(comp)
             if t_id:
                 term_id2comp_id[t_id] = comp.getId()
-        in2out = nest_compartments_with_gene_ontology(set(term_id2comp_id.iterkeys()), onto)
-        for in_t_id, out_t_id in in2out.iteritems():
+        in2out = nest_compartments_with_gene_ontology(set(term_id2comp_id.keys()), onto)
+        for in_t_id, out_t_id in in2out.items():
             if out_t_id:
                 model.getCompartment(term_id2comp_id[in_t_id]).setOutside(term_id2comp_id[out_t_id])
 
@@ -166,9 +168,9 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
 
     organelle2parts, extracellular, inside_cell, outside_cell = classify_cellular_components(t_ids, onto)
     # we might have added organelles that were not among t_ids, so let's add outsides for them
-    comp2out.update({organelle: get_outside_comp_id(organelle, onto, t_ids) for organelle in organelle2parts.iterkeys()})
+    comp2out.update({organelle: get_outside_comp_id(organelle, onto, t_ids) for organelle in organelle2parts.keys()})
 
-    organelle_parts = reduce(lambda s1, s2: s1 | s2, organelle2parts.itervalues(), set(organelle2parts.iterkeys()))
+    organelle_parts = reduce(lambda s1, s2: s1 | s2, organelle2parts.values(), set(organelle2parts.keys()))
 
     innermost_extracellular_comp = None
     if extracellular:
@@ -181,7 +183,7 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
                           comp2out, onto)
 
     # surround those that are not surrounded
-    for comp in comp2out.iterkeys():
+    for comp in comp2out.keys():
         if comp in inside_cell:
             if not comp2out[comp]:
                 if comp in organelle_parts and comp != cell_outermost:
@@ -190,14 +192,14 @@ def nest_compartments_with_gene_ontology(t_ids, onto):
                     comp2out[comp] = innermost_extracellular_comp
 
     # correct organelle_membrane part_of organelle inferences:
-    for organelle, parts in organelle2parts.iteritems():
+    for organelle, parts in organelle2parts.items():
         correct_membranes(organelle, parts, comp2out, onto)
 
     # remove additional terms added before in (*)
-    additional_organelles = (set(comp2out.iterkeys()) | {it for it in comp2out.itervalues() if it}) - t_ids
+    additional_organelles = (set(comp2out.keys()) | {it for it in comp2out.values() if it}) - t_ids
     for it in additional_organelles:
         outside = comp2out[it]
-        comp2out = {comp: (out if it != out else outside) for (comp, out) in comp2out.iteritems() if comp != it}
+        comp2out = {comp: (out if it != out else outside) for (comp, out) in comp2out.items() if comp != it}
 
     return comp2out
 

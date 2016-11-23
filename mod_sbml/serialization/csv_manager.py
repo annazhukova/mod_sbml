@@ -97,7 +97,7 @@ def serialize_common_elements_to_csv(model_id2dfs, model_id2c_id_groups, model_i
 
         csv = '%s%s.csv' % (prefix, suffix)
         columns = ['Model']
-        columns.extend(next(model_id2dfs.itervalues())[i].columns)
+        columns.extend(next(iter(model_id2dfs.values()))[i].columns)
         df2csv(DataFrame(data=data, columns=columns), csv)
 
         return csv

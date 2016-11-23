@@ -81,6 +81,11 @@ def biomassless_model(model):
 
 
 def get_biomass_r_ids(model):
+    """
+    Find biomass-related reactions in the model.
+    :param model: libsbml.Model model of interest
+    :return: set of biomass-related reaction ids
+    """
     has_biomass = lambda s: s and (-1 != s.lower().find('biomass') or -1 != s.lower().find('growth'))
     biomass_s_ids = {species.getId() for species in model.getListOfSpecies()
                      if has_biomass(species.getName()) or has_biomass(species.getId())}
@@ -104,9 +109,9 @@ def remove_species(model, s_ids_to_remove):
 
 def compress_reaction_participants(model, r_id2coeff, zero_threshold=1e-3):
     m_id2stoichiometry = Counter()
-    for r_id, coeff in r_id2coeff.iteritems():
+    for r_id, coeff in r_id2coeff.items():
         r = model.getReaction(r_id)
         m_id2stoichiometry.update({m_id: -st * coeff for (m_id, st) in get_reactants(r, stoichiometry=True)})
         m_id2stoichiometry.update({m_id: st * coeff for (m_id, st) in get_products(r, stoichiometry=True)})
-    return {m_id: -st for (m_id, st) in m_id2stoichiometry.iteritems() if st < -zero_threshold},\
-           {m_id: st for (m_id, st) in m_id2stoichiometry.iteritems() if st > zero_threshold}
+    return {m_id: -st for (m_id, st) in m_id2stoichiometry.items() if st < -zero_threshold},\
+           {m_id: st for (m_id, st) in m_id2stoichiometry.items() if st > zero_threshold}

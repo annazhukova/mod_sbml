@@ -1,4 +1,5 @@
 import os
+from functools import reduce
 
 from mod_sbml.onto.obo_ontology import Ontology
 from mod_sbml.onto.term import Term, FORMULA
@@ -113,6 +114,17 @@ def parse(obo_file, relationships=None):
 
 
 def filter_ontology(onto, terms_collection, relationships=None, min_deepness=None):
+    """
+    Filters a given ontology by removing the terms that are not in the given collection, nor their/ or their
+    generalized (via specified relationships) ancestors' (up to the min_deepness level of ancestry)
+    generalized descendants. Also removes the relationships that are not in the specified set.
+    :param onto: mod_sbml.onto.obo_ontology.Ontology ontology
+    :param terms_collection: collection of terms to be kept
+    :param relationships: collection of terms to be kept (or None to keep all of them)
+    :param min_deepness: int, generalized (via specified relationships) ancestors' up to the min_deepness
+    level of ancestry will be considered (or None to get ancestors up to root)
+    :return: void, the ontology is modified inplace
+    """
     terms_to_keep = set()
 
     for term in terms_collection:
@@ -140,7 +152,7 @@ def save_simple(onto, path):
             processed_terms.add(id_)
             f.write(str(term))
         f.write(RELS_HEADER)
-        for rel in reduce(lambda s1, s2: s1 | s2, onto.rel_map.itervalues(), set()):
+        for rel in reduce(lambda s1, s2: s1 | s2, onto.rel_map.values(), set()):
             f.write("%s\t%s\t%s\n" % rel)
 
 

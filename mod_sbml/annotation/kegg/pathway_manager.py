@@ -1,10 +1,6 @@
-import logging
+from urllib.request import urlopen
 
-try:
-    import urllib2
-except:
-    logging.error('Some of the functionality might not be available. Install urllib2 package to have it.')
-    pass
+
 
 ORG_HUMAN = "hsa"
 ORG_SACE = "sce"
@@ -25,7 +21,7 @@ def get_pw_by_reactions(rns, org):
     i = 0
     while i < len(rns):
         j = min(i + 10, len(rns))
-        pathways_by_reactions = urllib2.urlopen(
+        pathways_by_reactions = urlopen(
             'http://rest.kegg.jp/link/pathway/%s+%s' % (org, "+".join(rns[i:j]))).read()
         for line in pathways_by_reactions.split("\n"):
             if line.find("path:map") != -1:
@@ -36,14 +32,14 @@ def get_pw_by_reactions(rns, org):
 
 
 def get_reactions_by_pw(org, pw):
-    reactions_by_pathway = urllib2.urlopen('http://rest.kegg.jp/link/rn/%s+%s' % (org, pw)).read()
+    reactions_by_pathway = urlopen('http://rest.kegg.jp/link/rn/%s+%s' % (org, pw)).read()
     return {r for r in {r.replace("%s\t" % pw, '').strip() for r in reactions_by_pathway.split("\n")} if
             r.find('rn:') != -1}
 
 
 def get_pw_name(org, pw):
     try:
-        result = urllib2.urlopen('http://rest.kegg.jp/find/pathway/%s' % p_id_specific2generic(org, pw)).read()
+        result = urlopen('http://rest.kegg.jp/find/pathway/%s' % p_id_specific2generic(org, pw)).read()
     except:
         return None
     result = result.replace("\n", '')
@@ -55,7 +51,7 @@ def get_pw_name(org, pw):
 
 def get_pw_by_organism(org):
     pw2name = {}
-    pathways = urllib2.urlopen('http://rest.kegg.jp/list/pathway/%s' % org).read()
+    pathways = urlopen('http://rest.kegg.jp/list/pathway/%s' % org).read()
     for line in pathways.split("\n"):
         if line.find("path:") != -1:
             pw, p_name = line.split("\t")
@@ -65,7 +61,7 @@ def get_pw_by_organism(org):
 
 def get_name2pw(org='map'):
     name2pw = {}
-    pathways = urllib2.urlopen('http://rest.kegg.jp/list/pathway/%s' % org).read()
+    pathways = urlopen('http://rest.kegg.jp/list/pathway/%s' % org).read().decode()
     for line in pathways.split("\n"):
         if line.find("path:") != -1:
             pw, p_name = line.split("\t")

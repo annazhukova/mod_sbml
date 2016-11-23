@@ -46,7 +46,7 @@ def get_info(path, columns, start_row=1):
     workbook = openpyxl.load_workbook(path)
     worksheet = workbook.get_active_sheet()
     r_len = len(worksheet.rows)
-    for i in xrange(start_row, r_len + 1):
+    for i in range(start_row, r_len + 1):
         yield [worksheet.cell(row=i, column=j).value for j in columns]
 
 

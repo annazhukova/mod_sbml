@@ -1,3 +1,4 @@
+from functools import reduce
 from itertools import chain
 import re
 
@@ -75,6 +76,12 @@ def infer_chebi_term(m, chebi, model=None):
 
 
 def annotate_metabolites(model, chebi):
+    """
+    Infers ChEBI terms for metabolites that lack them and annotates.
+    :param model: libsbml.Model model of interest
+    :param chebi: mod_sbml.onto.obo_ontology.Ontology ChEBI ontology
+    :return: void, input model is modified inplace
+    """
     for m in model.getListOfSpecies():
         if get_chebi_id(m):
             continue
@@ -84,6 +91,11 @@ def annotate_metabolites(model, chebi):
 
 
 def get_species_id2chebi_id(model):
+    """
+    Gets species id to CheBI term id mapping from the model.
+    :param model: libsbml.Model model
+    :return: dict {species_id: ChEBI_term_id}
+    """
     s_id2chebi_id = {}
     for s in model.getListOfSpecies():
         chebi_id = get_chebi_id(s)
@@ -111,12 +123,22 @@ def get_cofactor_ids(onto):
     return add_equivalent_chebi_ids(onto, cofactor_ids)
 
 
-def add_equivalent_chebi_ids(ontology, chebi_ids):
-    return reduce(lambda s1, s2: s1 | s2,
-                  (reduce(lambda s1, s2: s1 | s2,
-                          (it.get_all_ids() for it in ontology.get_equivalents(t, relationships=EQUIVALENT_RELATIONSHIPS)),
-                          t.get_all_ids())
-                   for t in (it for it in (ontology.get_term(ub_id) for ub_id in chebi_ids) if it)), chebi_ids)
+def add_equivalent_chebi_ids(ontology, chebi_ids, eq_rel=EQUIVALENT_RELATIONSHIPS):
+    """
+    Returns a extended set that contains the input ChEBI term id collection
+    plus the ids of terms that are equivalent to those in the input collection.
+    :param eq_rel: set of equivalence relationships (by default 'is_conjugate_base/acid_of' and 'is_taumer_of').
+    :param ontology: mod_sbml.onto.obo_ontology.Ontology ChEBI ontology
+    :param chebi_ids: collection of ChEBI term ids.
+    :return: set of ChEBI term ids (input + equivalent)
+    """
+    cup = lambda s1, s2: s1 | s2
+    return \
+        reduce(cup,
+               (reduce(cup,
+                       (it.get_all_ids() for it in ontology.get_equivalents(t, relationships=eq_rel)),
+                       t.get_all_ids())
+                for t in (it for it in (ontology.get_term(ub_id) for ub_id in chebi_ids) if it)), chebi_ids)
 
 
 

@@ -103,13 +103,13 @@ def annotate_pathways(model, threshold=0.5, org='map'):
     if not org:
         org = 'map'
     kegg_r_id2r_ids = get_kegg_r_id2r_ids(model)
-    kegg_r_ids = set(kegg_r_id2r_ids.iterkeys())
+    kegg_r_ids = set(kegg_r_id2r_ids.keys())
     pw2name_rs_ratio = []
     try:
         pw2name_rs_ratio = get_relevant_pathway_info(org, {"rn:" + r_id for r_id in kegg_r_ids}, threshold=threshold)
     except Exception as e:
         logging.error('Did not manage to infer pathways due to %s' % e.message)
-    for pw, (name, rns, ratio) in pw2name_rs_ratio.iteritems():
+    for pw, (name, rns, ratio) in pw2name_rs_ratio.items():
         pw = pw.replace("pathway:", "")
         for kegg_r_id in rns:
             kegg_r_id = kegg_r_id.replace("rn:", "")

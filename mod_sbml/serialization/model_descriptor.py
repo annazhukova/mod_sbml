@@ -52,7 +52,7 @@ def model_statistics(model, org, pathways=True, extracellular=None):
     print("Blocked metabolites: ", len(blocked_ms))
     print("Transport reactions: ", len(transport))
     print("-------------Reaction distribution-----------------")
-    for c_ids in sorted(c2reactions.iterkeys()):
+    for c_ids in sorted(c2reactions.keys()):
         print([model.getCompartment(c_id).name for c_id in c_ids], c2reactions[c_ids])
     print("---------------------------------------------------")
 
@@ -62,7 +62,7 @@ def model_statistics(model, org, pathways=True, extracellular=None):
         if not pw2r_ids.keys():
             pw2r_ids, o_r_ids = get_subsystem2r_ids(model=model)
         print("-----------------Pathways----------------------")
-        for pw, r_ids in sorted(pw2r_ids.iteritems(), key=lambda it: it[0]):
+        for pw, r_ids in sorted(pw2r_ids.items(), key=lambda it: it[0]):
             print ('%s\t%d' % (pw, len(r_ids)))
         print ('No pathway\t%d' % (len(o_r_ids)))
 

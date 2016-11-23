@@ -63,7 +63,7 @@ def create_figure(xs, legend2ys, x_label, path, legend2color=None):
     i = 1
     n = len(legend2ys)
     m = 1
-    for legend, ys in legend2ys.iteritems():
+    for legend, ys in legend2ys.items():
         plt.subplot(n, m, i)
         if legend2color and legend in legend2color:
             plt.plot(xs, ys, linewidth=1.0, ls='-', color=legend2color[legend])

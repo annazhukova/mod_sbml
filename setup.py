@@ -34,6 +34,7 @@ setup(name='mod_sbml',
       ],
       download_url='https://github.com/annazhukova/mod_sbml',
       url='https://github.com/annazhukova/mod_sbml',
-      install_requires=['openpyxl', 'python-libsbml-experimental', 'pandas', 'matplotlib', 'colorsys', 'pyparsing']
+      install_requires=['openpyxl', 'python-libsbml-experimental', 'pandas', 'matplotlib', 'colorsys', 'pyparsing',
+                        'natsort']
       )
 

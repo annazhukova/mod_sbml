@@ -42,7 +42,7 @@ def get_frequent_term_ids(model, threshold=UBIQUITOUS_THRESHOLD):
                 key2vote[key] = 1
 
     ubiquitous_ch_ids = set()
-    for (chebi_id, _), vote in key2vote.iteritems():
+    for (chebi_id, _), vote in key2vote.items():
         if vote > threshold:
             ubiquitous_ch_ids.add(chebi_id)
 
@@ -51,6 +51,16 @@ def get_frequent_term_ids(model, threshold=UBIQUITOUS_THRESHOLD):
 
 def get_ubiquitous_chebi_ids(add_common=True, add_cofactors=True, add_frequent=False,
                              ubiquitous_threshold=UBIQUITOUS_THRESHOLD, model=None, chebi=None):
+    """
+    Infers a set of ubiquitous ChEBI ids.
+    :param add_common: whether to add common ubiquitous ChEBI ids, such as water, O2, etc.
+    :param add_cofactors: whether to add all the ChEBI ids marked as cofactors.
+    :param add_frequent: whether to add ChEBI ids of metabolites that appear frequently in the model.
+    :param ubiquitous_threshold: a threshold for a ChEBI id to be considered appearing frequently in the model.
+    :param model: libsbml.Model model of interest (to be used for add_frequent, otherwise can be left None)
+    :param chebi: mod_sbml.onto.obo_ontology.Ontology ChEBI ontology
+    :return: a set of ubiquitous ChEBI ids.
+    """
     global cofactor_ch_ids, common_ch_ids
     ubiquitous_chebi_ids = set()
     if add_cofactors:
@@ -80,5 +90,11 @@ def get_proton_ch_ids():
 
 
 def select_metabolite_ids_by_term_ids(model, selected_chebi_ids):
+    """
+    Returns a list of ids of metabolites that are annotated with any of the given ChEBI term ids.
+    :param model: libsbml.Model input model
+    :param selected_chebi_ids: collection of ChEBI term ids of interest
+    :return: set of metabolite ids of interest
+    """
     return {s.getId() for s in model.getListOfSpecies() if get_chebi_id(s) in selected_chebi_ids}
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 from collections import defaultdict
+from functools import reduce
+
+from natsort import natsorted
 
 from mod_sbml.utils.misc import remove_from_map
-from mod_sbml.utils.natsort import natsorted, natcasecmp
 
 PART_OF = "part_of"
 
@@ -25,13 +27,13 @@ class Ontology(object):
         self.parent2children = defaultdict(set)
 
     def get_all_terms(self):
-        return self.id2term.values()
+        return list(self.id2term.values())
 
     def __len__(self):
         return len(self.id2term)
 
     def get_all_term_ids(self):
-        return set(self.id2term.iterkeys())
+        return set(self.id2term.keys())
 
     def add_relationship(self, subj, rel, obj):
         relationship = (subj, rel, obj)
@@ -57,7 +59,7 @@ class Ontology(object):
 
     def get_relationships(self):
         result = set()
-        for rel_set in self.rel_map.itervalues():
+        for rel_set in self.rel_map.values():
             result |= {rel for (subj, rel, obj) in rel_set}
         return result
 
@@ -85,7 +87,7 @@ class Ontology(object):
 
     def filter_relationships(self, rel_to_keep):
         to_remove = set()
-        for rel_set in self.rel_map.itervalues():
+        for rel_set in self.rel_map.values():
             for (subj, rel, obj) in rel_set:
                 if rel not in rel_to_keep:
                     to_remove.add((subj, rel, obj))
@@ -177,12 +179,12 @@ class Ontology(object):
             return self.alt_id2term[key]
         if not check_only_ids:
             if key in self.xref2term_ids:
-                for t_id in natsorted(self.xref2term_ids[key], cmp=natcasecmp):
+                for t_id in natsorted(self.xref2term_ids[key], key=lambda y: y.lower()):
                     if t_id in self.id2term:
                         return self.id2term[t_id]
             key = normalize(key)
             if key in self.name2term_ids:
-                for t_id in natsorted(self.name2term_ids[key], cmp=natcasecmp):
+                for t_id in natsorted(self.name2term_ids[key], key=lambda y: y.lower()):
                     if t_id in self.id2term:
                         return self.id2term[t_id]
         return None
@@ -425,6 +427,12 @@ class Ontology(object):
                 remove_from_map(self.rel_map, o_id, (subj_id, r, o_id))
 
     def trim(self, root_ids, relationships=None):
+        """
+        Remove all the terms above the given ones from this ontology
+        :param root_ids: collection of the desired root term ids
+        :param relationships: set of relationships for detecting generalized ancestors
+        :return: void (updates this ontology inplace)
+        """
         for r_id in root_ids:
             r = self.get_term(r_id)
             ancestors = self.get_generalized_ancestors(r, relationships=relationships)
