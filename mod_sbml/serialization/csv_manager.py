@@ -11,9 +11,19 @@ __author__ = 'anna'
 
 
 def serialize_model_info(model, prefix, c_id2level=None):
+    """
+    Serializes the information on model compartments, metabolites and reactions into 3 tab-delimited files:
+    <prefix>_compartments.tab, <prefix>_metabolites.tab, and <prefix>_reactions.tab.
+    :param model: libsbml.Model the model to be serialized
+    :param prefix: str, path prefix for the output files: <prefix>_compartments.tab, <prefix>_metabolites.tab,
+    and <prefix>_reactions.tab
+    :param c_id2level: (optional), ordering of compartment dict {c_id: level} into levels (int).
+    If specified, reactions and metabolites will be sorted by compartment.
+    :return: void
+    """
 
     def to_csv(to_df, name):
-        csv = '%s%s.csv' % (prefix, name)
+        csv = '%s%s.tab' % (prefix, name)
         df2csv(to_df(model, c_id2level=c_id2level), csv)
         return csv
 

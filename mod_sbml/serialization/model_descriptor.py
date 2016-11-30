@@ -2,7 +2,6 @@ from collections import defaultdict
 
 import libsbml
 
-from mod_sbml.annotation.kegg.pathway_manager import get_pw_name
 from mod_sbml.annotation.kegg.kegg_annotator import get_pathway2r_ids
 from mod_sbml.sbml.sbml_manager import get_metabolites, get_subsystem2r_ids, \
     get_reactants, get_products
@@ -11,7 +10,7 @@ from mod_sbml.sbml.sbml_manager import get_metabolites, get_subsystem2r_ids, \
 __author__ = 'anna'
 
 
-def model_statistics(model, org, pathways=True, extracellular=None):
+def model_statistics(model, pathways=True, extracellular=None):
     print("Compartments: ", model.getNumCompartments(), "Metabolites: ", model.getNumSpecies(), "Reactions: ",
           model.getNumReactions())
     print("Compartments: %s" % ", ".join([c.name for c in model.getListOfCompartments()]))
@@ -48,7 +47,7 @@ def model_statistics(model, org, pathways=True, extracellular=None):
     boundary_ms_ids = {s.id for s in boundary_ms}
     blocked_ms = {s_id for s_id in s_id2r_rs if s_id not in s_id2p_rs and s_id not in boundary_ms_ids} | \
                  {s_id for s_id in s_id2p_rs if s_id not in s_id2r_rs and s_id not in boundary_ms_ids}
-    print("Real metabolites: ", len(s_id2rs.keys()))
+    print("Real metabolites: ", len(s_id2rs))
     print("Blocked metabolites: ", len(blocked_ms))
     print("Transport reactions: ", len(transport))
     print("-------------Reaction distribution-----------------")
@@ -81,4 +80,4 @@ if __name__ == "__main__":
     doc = reader.readSBML(params.model)
     model = doc.getModel()
 
-    model_statistics(model, params.org, pathways=True, extracellular=None)
+    model_statistics(model, pathways=True, extracellular=None)
