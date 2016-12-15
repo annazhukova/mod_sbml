@@ -10,7 +10,7 @@ from mod_sbml.serialization import get_sbml_r_formula, df2csv
 __author__ = 'anna'
 
 
-def serialize_model_info(model, prefix, c_id2level=None):
+def serialize_model_info(model, prefix, c_id2level=None, blocked_reactions=[]):
     """
     Serializes the information on model compartments, metabolites and reactions into 3 tab-delimited files:
     <prefix>_compartments.tab, <prefix>_metabolites.tab, and <prefix>_reactions.tab.
@@ -28,7 +28,8 @@ def serialize_model_info(model, prefix, c_id2level=None):
         return csv
 
     return to_csv(compartments2df, 'compartments'), to_csv(metabolites2df, 'metabolites'), \
-           to_csv(reactions2df, 'reactions')
+           to_csv(lambda model, c_id2level:
+                  reactions2df(model, c_id2level=c_id2level, blocked_reactions=blocked_reactions), 'reactions')
 
 
 def metabolites2df(model, c_id2level=None):
@@ -44,7 +45,8 @@ def metabolites2df(model, c_id2level=None):
     for m in sorted(model.getListOfSpecies(), key=get_key):
         formulas = get_formulas(m)
         data.append(
-            (m.id, m.name, m.getCompartment(), formulas.pop() if formulas else None, get_kegg_m_id(m), get_chebi_id(m)))
+            (m.id, m.name, model.getCompartment(m.getCompartment()).getName(),
+             formulas.pop() if formulas else None, get_kegg_m_id(m), get_chebi_id(m)))
         index.append(m.id)
     columns = ['Id', 'Name', 'Compartment', 'Formula', 'KEGG', 'ChEBI']
     return DataFrame(data=data, index=index, columns=columns)
@@ -65,7 +67,7 @@ def compartments2df(model, c_id2level=None):
     return DataFrame(data=data, index=index, columns=['Id', 'Name', "GO"])
 
 
-def reactions2df(model, r_ids=None, c_id2level=None):
+def reactions2df(model, r_ids=None, c_id2level=None, blocked_reactions=[]):
     data = []
     index = []
 
@@ -79,19 +81,25 @@ def reactions2df(model, r_ids=None, c_id2level=None):
     rs = model.getListOfReactions() if not r_ids else (r for r in model.getListOfReactions() if r.id in r_ids)
 
     for r in sorted(rs, key=get_key):
-        data.append((r.id, r.name, get_bounds(r)[0], get_bounds(r)[1],
-                     get_sbml_r_formula(model, r, show_compartments=True, show_metabolite_ids=True),
-                     ', '.join(tuple(sorted(get_r_comps(r.id, model)))),
-                     get_kegg_r_id(r), get_gene_association(r), ','.join(get_pathway_expression(r))))
+        record = (r.id, r.name, get_bounds(r)[0], get_bounds(r)[1],
+              get_sbml_r_formula(model, r, show_compartments=True, show_metabolite_ids=False),
+              ', '.join(tuple(sorted(model.getCompartment(c_id).getName() for c_id in get_r_comps(r.id, model)))),
+              get_kegg_r_id(r), get_gene_association(r), ','.join(get_pathway_expression(r)))
+        if blocked_reactions:
+            record += 'blocked' if r.id in blocked_reactions else '',
+        data.append(record)
         index.append(r.id)
 
+    columns = ["Id", "Name", "Lower Bound", "Upper Bound", "Formula", 'Compartments', "KEGG", "Gene association",
+               "Subsystems"]
+    if blocked_reactions:
+        columns += ['Is blocked']
     return DataFrame(data=data, index=index,
-                     columns=["Id", "Name", "Lower Bound", "Upper Bound", "Formula", 'Compartments',
-                              "KEGG", "Gene association", "Subsystems"])
+                     columns=columns)
 
 
 def serialize_common_elements_to_csv(model_id2dfs, model_id2c_id_groups, model_id2m_id_groups,
-                                                     model_id2r_id_groups, prefix):
+                                     model_id2r_id_groups, prefix):
 
     def serialize_common_subpart_to_csv(i, model_id2id_groups, suffix):
         data = []

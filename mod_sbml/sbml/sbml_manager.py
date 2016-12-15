@@ -67,7 +67,7 @@ def _remove_duplicates(expression, flatten=False):
     result = []
     for gene in genes:
         result.append(gene)
-        result.append(operand)
+        result.append(operand.lower())
     return '(%s)' % ' '.join(result[: -1]) if flatten else tuple(result[: -1])
 
 
@@ -84,11 +84,11 @@ def _filter(expression, allowed_values, flatten=False):
     operand = expression[1]
     filtered_genes = [gene for gene in genes if gene is not None]
 
-    if operand in AND and len(filtered_genes) < len(genes) or not filtered_genes:
+    if operand in AND and (len(filtered_genes) < len(genes)) or not filtered_genes:
         return None
 
     if len(filtered_genes) == 1:
-        return genes.pop()
+        return filtered_genes.pop()
 
     result = []
     for gene in filtered_genes:
@@ -149,7 +149,7 @@ def get_gene_association(reaction, gene_parse_action=None, flatten=True, allowed
                 f_ga = _filter(ga, allowed_genes, flatten=flatten)
                 return f_ga if f_ga else None
             return ga
-        except pp.ParseBaseException as e:
+        except pp.ParseBaseException:
             logging.error('Ignoring the gene association for %s as it is malformed: %s' % (reaction.getId(), ga))
             return None
     return ''

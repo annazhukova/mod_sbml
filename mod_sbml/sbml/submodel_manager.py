@@ -15,34 +15,61 @@ def submodel_by_genes(model, genes_of_interest, keep_spontaneous_reactions=True)
     :param genes_of_interest: a collection of genes of interest (must be in the same notation as in the model)
     :return:
     """
-    r_ids = []
-    spontaneous_r_ids = []
-    for r in model.getListOfReactions():
-        ga = get_gene_association(r, flatten=True, allowed_genes=genes_of_interest)
-        if ga:
-            r_ids.append(r.getId())
-            set_gene_association(r, ga)
-        elif ga is not None and keep_spontaneous_reactions:
-            spontaneous_r_ids.append(r.getId())
+    r_ids, spontaneous_r_ids = get_reaction_ids_by_genes(model, genes_of_interest)
 
+    if keep_spontaneous_reactions:
+        r_ids = extend_selection_with_spontaneous_reactions(model, r_ids, spontaneous_r_ids)
+
+    submodel(r_ids, model)
+
+
+def extend_selection_with_spontaneous_reactions(model, r_ids, spontaneous_r_ids):
+    """
+    Iteratively enlarges the selection of reaction ids with spontaneous reactions whose input(output) metabolites
+    can be produced(consumed) by currently selected reactions.
+    :param model: libsbml.Model
+    :param r_ids: a collection of selected reaction ids
+    :param spontaneous_r_ids: a collection of spontaneous reaction ids
+    :return: an extended collection of selected reaction ids
+    """
+    new_r_ids = set(r_ids)
     if spontaneous_r_ids:
+        s_ids = set()
+        for r in (model.getReaction(r_id) for r_id in new_r_ids):
+            s_ids |= get_metabolites(r)
         updated = True
         while updated:
             updated = False
-            s_ids = set()
-            for r in (model.getReaction(r_id) for r_id in r_ids):
-                s_ids |= get_metabolites(r)
-
             for r in (model.getReaction(r_id) for r_id in spontaneous_r_ids):
                 rs, ps = set(get_reactants(r)), set(get_products(r))
                 if rs and rs == rs & s_ids or ps and ps == ps & s_ids:
-                    r_ids.append(r.getId())
+                    new_r_ids.add(r.getId())
                     n = len(s_ids)
                     s_ids |= rs | ps
                     if len(s_ids) > n:
                         updated = True
+    return new_r_ids
 
-    submodel(r_ids, model)
+
+def get_reaction_ids_by_genes(model, genes_of_interest):
+    """
+    Filters model reactions based on genes of interest. Reaction are selected
+    if their gene associations can be satisfied only with the genes_of_interest.
+    :param model: libsbml.Model the model of interest
+    :param genes_of_interest: a collection of genes of interest (must be in the same notation as in the model)
+    :return: tuple (r_ids, spontaneous_r_ids) Ids of reaction with non-empty gene associations that can be satisfied
+    only with the genes_of_interest, ids of spontaneous reactions.
+    """
+    r_ids = set()
+    spontaneous_r_ids = set()
+    for r in model.getListOfReactions():
+        ga = get_gene_association(r, flatten=True, allowed_genes=genes_of_interest)
+        if ga:
+            r_ids.add(r.getId())
+            set_gene_association(r, ga)
+        elif ga is not None:
+            spontaneous_r_ids.add(r.getId())
+    return r_ids, spontaneous_r_ids
 
 
 def submodel(r_ids_to_keep, model):
