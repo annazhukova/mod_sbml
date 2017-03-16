@@ -4,6 +4,10 @@ import os
 
 import libsbml
 import pyparsing as pp
+from libsbml._libsbml import GENE_ASSOCIATION
+from numpy import NaN
+
+SBO_COMPARTMENT = 'SBO:0000290'
 
 OR = ["OR", "or", "Or"]
 
@@ -188,13 +192,31 @@ def set_gene_association(reaction, gene_association):
     if not gene_association:
         return
     # Do not forget to convert s to str as if it is for example in Unicode, libsbml will complain
-    s = str('<p>GENE_ASSOCIATION: %s</p>' % gene_association)
+    s = str('<p>%s %s</p>' % (GA_PREFIX, gene_association))
 
     body = next(_get_nodes_of_type(reaction.getNotes(), 'body'), None)
     if body:
         body.addChild(libsbml.XMLNode_convertStringToXMLNode(s))
     else:
         reaction.setNotes(libsbml.XMLNode_convertStringToXMLNode(
+            str("<body xmlns='http://www.w3.org/1999/xhtml'>%s</body>" % s)))
+
+
+def set_formula(species, formula):
+    """Sets the species formula. (The old formula will be overwritten)
+    """
+    _remove_note_containing_text_of_interest(species.getNotes(), FORMULA_PREFIX)
+
+    if not formula:
+        return
+    # Do not forget to convert s to str as if it is for example in Unicode, libsbml will complain
+    s = str('<p>%s %s</p>' % (FORMULA_PREFIX, formula))
+
+    body = next(_get_nodes_of_type(species.getNotes(), 'body'), None)
+    if body:
+        body.addChild(libsbml.XMLNode_convertStringToXMLNode(s))
+    else:
+        species.setNotes(libsbml.XMLNode_convertStringToXMLNode(
             str("<body xmlns='http://www.w3.org/1999/xhtml'>%s</body>" % s)))
 
 
@@ -310,7 +332,8 @@ def get_r_comps(r_id, model):
     return {model.getSpecies(s_id).getCompartment() for s_id in get_metabolites(r, include_modifiers=False)}
 
 
-def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=None):
+def create_species(model, compartment_id, name=None, bound=False, id_=None, type_id=None, sbo_id=SBO_MATERIAL_ENTITY,
+                   charge=None):
     new_species = model.createSpecies()
     id_ = generate_unique_id(model, id_ if id_ else "s")
     if libsbml.LIBSBML_OPERATION_SUCCESS != new_species.setId(id_):
@@ -320,12 +343,18 @@ def create_species(model, compartment_id, name=None, bound=False, id_=None, type
     new_species.setCompartment(compartment_id)
     if type_id:
         new_species.setSpeciesType(type_id)
-    new_species.setSBOTerm(sbo_id if sbo_id else SBO_MATERIAL_ENTITY)
+    new_species.setSBOTerm(sbo_id)
     new_species.setBoundaryCondition(bound)
+    if charge is not None:
+        try:
+            charge = int(charge)
+            new_species.setCharge(charge)
+        except:
+            pass
     return new_species
 
 
-def create_compartment(model, name=None, outside=None, id_=None):
+def create_compartment(model, name=None, outside=None, id_=None, sbo_id=SBO_COMPARTMENT):
     new_comp = model.createCompartment()
     id_ = generate_unique_id(model, id_ if id_ else "c")
     res = new_comp.setId(id_)
@@ -335,6 +364,7 @@ def create_compartment(model, name=None, outside=None, id_=None):
         new_comp.setName(name)
     if outside:
         new_comp.setOutside(outside)
+    new_comp.setSBOTerm(sbo_id)
     return new_comp
 
 
@@ -421,7 +451,8 @@ def create_reaction(model, r_id2st, p_id2st, name=None, reversible=True, id_=Non
         logging.error("reaction %s creation error" % new_r_id)
     if name:
         new_r.setName(name)
-    new_r.setReversible(reversible)
+
+    new_r.setReversible(bool(reversible))
     for m_id, st in r_id2st.items():
         sr = new_r.createReactant()
         sr.setSpecies(m_id)

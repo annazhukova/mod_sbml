@@ -83,15 +83,15 @@ def is_not_transport(reaction, model):
 
 
 # by species
-def matches_species_id(species_ids, reaction):
-    return set(species_ids) & get_metabolites(reaction, include_modifiers=True)
+def matches_species_id(species_ids, reaction, include_modifiers=True):
+    return set(species_ids) & get_metabolites(reaction, include_modifiers=include_modifiers)
 
 
-def matches_species_name(name, reaction, model):
+def matches_species_name(name, reaction, model, include_modifiers=True):
     if not name:
         return False
     name = name.lower()
-    for speciesId in get_metabolites(reaction, include_modifiers=True):
+    for speciesId in get_metabolites(reaction, include_modifiers=include_modifiers):
         species = model.getSpecies(speciesId)
         if not species:
             continue
