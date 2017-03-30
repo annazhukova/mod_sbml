@@ -4,8 +4,6 @@ import os
 
 import libsbml
 import pyparsing as pp
-from libsbml._libsbml import GENE_ASSOCIATION
-from numpy import NaN
 
 SBO_COMPARTMENT = 'SBO:0000290'
 
@@ -119,7 +117,7 @@ def parse_gene_association(ga, gene_parse_action=None, flatten=True):
     ])
 
     res = expr.parseString(ga, parseAll=True).asList()
-    while len(res) == 1:
+    while not isinstance(res, str) and len(res) == 1:
         res = res[0]
     return _remove_duplicates(res, flatten=flatten)
 

@@ -15,7 +15,7 @@ class GATestCase(unittest.TestCase):
 
     def test_or_all_in(self):
         res = _filter(parse_gene_association('A or B', flatten=False), ['A', 'B'], flatten=True)
-        self.assertEqual('(A or B)', res, 'Was expecting "A or B", got %s' % res)
+        self.assertIn(res, ['(A or B)', '(B or A)'], 'Was expecting "A or B", got %s' % res)
 
     def test_or_some_in(self):
         res = _filter(parse_gene_association('A or C', flatten=False), ['A', 'B'], flatten=True)
@@ -27,7 +27,7 @@ class GATestCase(unittest.TestCase):
 
     def test_and_all_in(self):
         res = _filter(parse_gene_association('A and B', flatten=False), ['A', 'B'], flatten=True)
-        self.assertEqual('(A and B)', res, 'Was expecting "A and B", got %s' % res)
+        self.assertIn(res, ['(A and B)', '(B and A)'], 'Was expecting "A and B", got %s' % res)
 
     def test_and_some_in(self):
         res = _filter(parse_gene_association('A and C', flatten=False), ['A', 'B'], flatten=True)
@@ -47,4 +47,5 @@ class GATestCase(unittest.TestCase):
 
     def test_complicated_expression(self):
         res = _filter(parse_gene_association('(A or B or C) and D', flatten=False), ['A', 'B', 'D'], flatten=True)
-        self.assertIn(res, ['((A or B) and D)', '(D and (A or B))'],'Was expecting "((A or B) and D)", got %s' % res)
+        self.assertIn(res, ['((A or B) and D)', '(D and (A or B))', '((B or A) and D)', '(D and (B or A))'],
+                      'Was expecting "((A or B) and D)", got %s' % res)
