@@ -1,5 +1,9 @@
 import os
 from distutils.core import setup
+import sys
+
+if sys.version_info < (3,4,1):
+    sys.exit('Sorry, Python < 3.4.1 is not supported')
 
 setup(
     name='mod_sbml',
